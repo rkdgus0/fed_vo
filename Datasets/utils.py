@@ -216,18 +216,6 @@ def visflow(flownp, maxF=500.0, n=8, mask=None, hueMax=179, angShift=0.0):
     return bgr
 
 
-def dataset_intrinsics(dataset='tartanair'):
-    if dataset == 'kitti':
-        focalx, focaly, centerx, centery = 707.0912, 707.0912, 601.8873, 183.1104
-    elif dataset == 'euroc':
-        focalx, focaly, centerx, centery = 458.6539916992, 457.2959899902, 367.2149963379, 248.3750000000
-    elif dataset == 'tartanair':
-        focalx, focaly, centerx, centery = 320.0, 320.0, 320.0, 240.0
-    else:
-        return None
-    return focalx, focaly, centerx, centery
-
-
 
 def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
     fig = plt.figure(figsize=(4,4))

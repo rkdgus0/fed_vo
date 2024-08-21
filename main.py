@@ -15,33 +15,14 @@ from Datasets.transformation import ses2poses_quat
 from evaluator.tartanair_evaluator import TartanAirEvaluator
 from TartanVO import TartanVO
 from utils.train_utils import load_checkpoint, save_checkpoint, train_pose_batch
+
+from Network.VONet import VONet
+from Library.util import *
 import argparse
 
 def get_args():
     parser = argparse.ArgumentParser(description='C_VO with FL')
-'''
-    parser.add_argument('--worker_num', type=int, default=16,
-                        help='data loader worker number (default: 16)')
-    # Check the Size of Image(KITTI: W1226/H370, EuRoC_V102: W752/H480), 크기 달라도 상관X
-    parser.add_argument('--image_width', type=int, default=640,
-                        help='image width (default: 640)')
-    parser.add_argument('--image_height', type=int, default=448,
-                        help='image height (default: 448)')
-    parser.add_argument('--model_name', default='',
-                        help='name of pretrained model (default: "")')
-    parser.add_argument('--euroc', action='store_true', default=False,
-                        help='euroc test (default: False)')
-    parser.add_argument('--kitti', action='store_true', default=False,
-                        help='kitti test (default: False)')
-    parser.add_argument('--kitti_intrinsics_file',  default='',
-                        help='kitti intrinsics file calib.txt (default: )')
-    parser.add_argument('--test_dir', default='',
-                        help='test trajectory folder where the RGB images are (default: "")')
-    parser.add_argument('--pose_file', default='',
-                        help='test trajectory gt pose file, used for scale calculation, and visualization (default: "")')
-    parser.add_argument('--save_flow', action='store_true', default=False,
-                        help='save optical flow (default: False)')
-'''
+
     # ===== FL Setting ======
     # exp_name: Model의 weight와 학습 이후 Summary log 저장 path 설정 
     parser.add_argument('--exp_name', '-exp', type=str, default='Test',
@@ -57,9 +38,11 @@ def get_args():
 
     # ===== Model Setting =====
     # model: Pretrained된 model weight 저장 경로, .pkl 파일로 받음
-    parser.add_argument('--model', '-model', type=str, default='',
-                        help="name of pretrained model (default: '')")
+    parser.add_argument('--model', '-model', type=str, default='vonet',
+                        help="name of pretrained model (default: 'vonet')")
     # batch_size: model 학습과 evaluation에서 사용할 data 개수 조정
+    parser.add_argument('--optimizer', '-opt', type=str, default='Adam',
+                        help="name of model's optimizer (default: 'Adam')")
     parser.add_argument('--batch_size', '-batch', type=int, default=1,
                         help='batch size (default: 1)')
     # global_round: 전체 학습 round
@@ -93,30 +76,47 @@ def lr_lambda(current_round):
             return 0.2
         else:
             return 0.04
+
+def init_model(model, optimizer, lr):
+    model = torch.nn.DataParallel(VONet())
+    optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=lr)
+    scheduler = LambdaLR(optimizer, lr_lambda)
+    return model, optimizer, scheduler
+
     
 if __name__ == '__main__':
 
     args = get_args()
 
-    # load trajectory data from a folder
-    datastr = 'tartanair'
-    focalx, focaly, centerx, centery = dataset_intrinsics('tartanair')
-    with open('/root/volume/code/python/tartanvo/data/pose_left_paths.txt', 'r') as f:
-        posefiles = f.readlines()
+    NUM_NODE = args.node_num
+    GLOBAL_ROUND = args.global_round
+    DATASET_NAME = args.dataset
+    EXP_NAME = args.exp_name
 
-    iteration = 0 
-    num_epochs = 100
-    learning_rate = 1e-4
-    total_iterations = 100000
+    print('init the model & optimizer & scheduler ..')
+    model, optimizer, scheduler = init_model(args.model, args.optimizer, args.learning_rate)
+    print('Success to compose model\n')
+
+    print('init dataset and split the dataset..')
+    data_path, test_data, splited_datasets = initial_dataset(DATASET_NAME, NUM_NODE)
+    print('success to split train/test dats & Node dataset!\n')
+
+    print('init Server and Nodes..')
+    Node = compose_node(args, model, splited_datasets)
+    Server = compose_server(args, model, Node, test_data)
+    print('Success to compose Server & Nodes!\n')
+
+    focalx, focaly, centerx, centery = dataset_intrinsics(DATASET_NAME)
+    if DATASET_NAME == 'tartanair':
+        with open('/root/volume/code/python/tartanvo/data/pose_left_paths.txt', 'r') as f:
+            posefiles = f.readlines()
     
-    model = TartanVO()
-    model = torch.nn.DataParallel(model.vonet)
-    optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=learning_rate)
-    scheduler = LambdaLR(optimizer, lr_lambda)
-    summaryWriter = SummaryWriter('runs/exp1')
+    summaryWriter = SummaryWriter(f'runs/{EXP_NAME}')
     start_epoch,iteration = load_checkpoint(model, optimizer, scheduler, args.model_name)
 
-    for epoch in range(num_epochs):
+    for round in range(GLOBAL_ROUND):
+        #TODO 밑의 코드는 train 코드니까 따로 함수로 빼두기. 아마 Library/util에 만들기
+
         for posefile in posefiles:
             posefile = posefile.strip()
             print(posefile)
@@ -129,7 +129,7 @@ if __name__ == '__main__':
             trainDataiter = iter(trainDataloader)
 
             for batch_idx, sample in enumerate(trainDataiter):
-                total_loss,flow_loss,pose_loss,trans_loss,rot_loss = train_pose_batch(model.vonet, optimizer, sample)
+                total_loss,flow_loss,pose_loss,trans_loss,rot_loss = train_pose_batch(model, optimizer, sample)
                 iteration += 1
                 scheduler.step()
                 if iteration % 10 == 0:
@@ -138,12 +138,12 @@ if __name__ == '__main__':
                     summaryWriter.add_scalar('Loss/train_pose', pose_loss, iteration)
                     summaryWriter.add_scalar('Loss/train_trans', trans_loss, iteration)
                     summaryWriter.add_scalar('Loss/train_rot', rot_loss, iteration)
-                    print(f"Epoch {epoch + 1}, Step {iteration}, Loss: {total_loss}")
+                    print(f"Epoch {round + 1}, Step {iteration}, Loss: {total_loss}")
                     print(f"Flow Loss: {flow_loss}")
                     print(f"Pose Loss: {pose_loss}")
 
         model_save_path = f'models/model_iteration_{iteration}.pth'
-        save_checkpoint(model.vonet, optimizer, scheduler, epoch, iteration, model_save_path)
+        save_checkpoint(model.vonet, optimizer, scheduler, round, iteration, model_save_path)
 
 
         

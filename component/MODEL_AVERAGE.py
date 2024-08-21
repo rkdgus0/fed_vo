@@ -1,3 +1,4 @@
+#XXX 서버에서만 사용하니까 굳이 따로 유지할 필요는 없어보임. 지워도 되는지 확인해보기
 import torch
 
 class BASE:

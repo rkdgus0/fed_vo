@@ -2,6 +2,7 @@ import copy
 import torch
 import numpy as np
 import random
+from Library.train import flow_train, flowpose_train, whole_train
 
 class SERVER():
     def __init__(self, model, nodes, NUM_NODE, test_data, avg_method='fedavg', num_node_data=None):
@@ -42,8 +43,9 @@ class SERVER():
 
     def test(self):
         #TODO Test dataset을 이용해서, Global Model의 성능을 확인하는 코드
+        
 
-
+    # 모델 가중치 aggregation method(Fedavg: 데이터 수, Equal: 동등)
     def calc_avg_ratio(self, models, participating_node):
         ratio = []
         if self.avg_method == 'fedavg':
@@ -59,6 +61,7 @@ class SERVER():
         for param_group in self.nodes.optimizer.param_groups:
             param_group['lr'] = lr
 
+    # calc_avg_ratio의 가중치를 기준으로 local model을 합쳐, global model 생성
     @staticmethod
     def average_model(models, avg_ratio=None):
         new_weights = []
