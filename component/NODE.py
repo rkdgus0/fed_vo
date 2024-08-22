@@ -37,6 +37,7 @@ class NODE():
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
 
             print(f"Client {client_idx}, Epoch {epoch+1}/{self.epochs}, Loss: {loss.item()}")
 
