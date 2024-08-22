@@ -20,6 +20,7 @@ from Network.VONet import VONet
 from Library.util import *
 import argparse
 
+#TODO Parser 파라미터 변경해야할 수 있음.
 def get_args():
     parser = argparse.ArgumentParser(description='C_VO with FL')
 
@@ -102,8 +103,8 @@ if __name__ == '__main__':
     print('success to split train/test dats & Node dataset!\n')
 
     print('init Server and Nodes..')
-    Node = compose_node(args, model, splited_datasets)
-    Server = compose_server(args, model, Node, test_data)
+    Node = compose_node(args, model, optimizer, scheduler, splited_datasets)
+    Server = compose_server(args, model, optimizer, scheduler, Node, test_data)
     print('Success to compose Server & Nodes!\n')
 
     focalx, focaly, centerx, centery = dataset_intrinsics(DATASET_NAME)

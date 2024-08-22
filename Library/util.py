@@ -15,10 +15,10 @@ def compose_server(args, model, nodes, test_data):
 
     return SERVER(model, nodes, NUM_NODE, test_data, avg_method, num_node_data)
 
-def compose_node(args, model, splited_datasets):
+def compose_node(args, model, scheduler, splited_datasets):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    return NODE(model, init_lr=args.learning_rate, datasets=splited_datasets, epochs=args.n_epochs, 
+    return NODE(model, scheduler, init_lr=args.learning_rate, datasets=splited_datasets, epochs=args.n_epochs, 
                 batch_size=args.batch_size, device=device)
 
 
@@ -46,7 +46,7 @@ def initial_dataset(dataset, node_num):
         path = '/home/data/jeongeon/tartanair'
         # tartanair의 
         train_class = ['ocean', '']
-        test_index = ['a', 'b']
+        test_class = ['a', 'b']
     elif dataset.lower() == '~~~~':
         path = '/root/volume/code/python/tartanvo/data/pose_left_paths.txt'
     
@@ -59,9 +59,9 @@ def initial_dataset(dataset, node_num):
     
     train_index[node_num] = train_class[node_num * mod :]
 
-    #TODO 해당 path에는 여러 클래스가 존재함. 
+    #XXX 해당 path에는 여러 클래스가 존재함. 
     # 해당 path 아래에는 해당 클래스 이름으로 구성된 폴더명/(EASY or HARD)/pose_left_paths.txt에서 pose를 알 수 있음
     # 19개의 클래스를 TestSet과 TrainSet(각 node의 SubDataset)으로 구성해야함
-    #XXX 클래스명을 split한 뒤에, Path와 함께 return해서 train code에서 데이터 불러와서 돌리는 함수로 구성해봄
+    #XXX 클래스명을 split한 뒤에, Path와 함께 return해서 train code에서 데이터 불러와서 돌리는 함수로 구성하는 것으로 생각중
 
     return path, test_index, train_index

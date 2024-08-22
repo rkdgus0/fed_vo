@@ -15,7 +15,7 @@ class SERVER():
         self.num_node_data = copy.deepcopy(num_node_data)
 
     # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average하는 코드
-    #XXX 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
+    #TODO 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
     def train(self):
         uploaded_models = []
         participating_node = []
@@ -40,10 +40,11 @@ class SERVER():
 
             uploaded_models.clear()
             avg_model.clear()
-
+   
+   #TODO Test dataset을 이용해서, Global Model의 성능을 확인하는 코드 추가 요망(evaluation code와 동일할 것으로 보임)
     def test(self):
-        #TODO Test dataset을 이용해서, Global Model의 성능을 확인하는 코드
         
+        return
 
     # 모델 가중치 aggregation method(Fedavg: 데이터 수, Equal: 동등)
     def calc_avg_ratio(self, models, participating_node):
