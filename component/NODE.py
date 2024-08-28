@@ -18,7 +18,7 @@ class NODE():
         self.criterion = nn.CrossEntropyLoss()
 
     def train(self, client_idx, model_parameters):
-        self.model.load_state_dict(model_parameters)
+        self.model.load_state_dict(model_parameters) #global model
 
         #TODO 아래의 train dataset을 가져오는 파트 변경, Input 형식도 동일
         # x_train = torch.tensor(self.datasets[client_idx]['x'], dtype=torch.float32).to(self.device)

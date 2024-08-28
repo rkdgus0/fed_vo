@@ -23,17 +23,8 @@ def compose_node(args, model, scheduler, splited_datasets):
 
 
 # ===== Dataset Preprocessing =====
-def dataset_intrinsics(dataset='tartanair'):
-    if dataset == 'kitti':
-        focalx, focaly, centerx, centery = 707.0912, 707.0912, 601.8873, 183.1104
-    elif dataset == 'euroc':
-        focalx, focaly, centerx, centery = 458.6539916992, 457.2959899902, 367.2149963379, 248.3750000000
-    elif dataset == 'tartanair':
-        focalx, focaly, centerx, centery = 320.0, 320.0, 320.0, 240.0
-    else:
-        return None
-    return focalx, focaly, centerx, centery
-
+# 폐기. Datasets/dataset.py에서 데이터셋 정리함
+'''
 def initial_dataset(dataset, node_num):
     train_index =[[] for _ in range(node_num)]
 
@@ -64,4 +55,4 @@ def initial_dataset(dataset, node_num):
     # 19개의 클래스를 TestSet과 TrainSet(각 node의 SubDataset)으로 구성해야함
     #XXX 클래스명을 split한 뒤에, Path와 함께 return해서 train code에서 데이터 불러와서 돌리는 함수로 구성하는 것으로 생각중
 
-    return path, test_index, train_index
+    return path, test_index, train_index'''

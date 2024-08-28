@@ -58,8 +58,10 @@ def get_args():
     
     # ====== Dataset Setting ======
     # dataset: train과 test에 사용할 dataset
-    parser.add_argument('--dataset', '-dataset', type=str, default='KITTI',
-                        help="Dataset Name (select: KITTI, EuroC, TartanAir), (default: KITTI)")
+    parser.add_argument('--data_path', '-data', type=str, default='/sctrach/jeongeon/tartanAir',
+                        help="Dataset folde path, (default: ???/sctrach/jeongeon)")
+    parser.add_argument('--easy_hard', '-e_h', type=str, default='easy',
+                        help="Dataset type(select: easy, hard, both), (default: easy)")
     # image_width: 이미지 크기 조정에 사용할 parameter
     parser.add_argument('--image_width', '-img_w', type=int, default=640,
                         help='image width (select: multiple of 64), (default: 640)')
@@ -99,7 +101,9 @@ if __name__ == '__main__':
     print('Success to compose model\n')
 
     print('init dataset and split the dataset..')
-    data_path, test_data, splited_datasets = initial_dataset(DATASET_NAME, NUM_NODE)
+    transform = Compose([CropCenter((args.image_height, args.image_width)), DownscaleFlow(), ToTensor()])
+    # Can change test environments
+    data_path, test_data, splited_datasets = initial_dataset(root_dir=args.data_path, mode=args.easy_hard, node_num=NUM_NODE, transform=transform, test_environments=['ocean', 'amusement'])
     print('success to split train/test dats & Node dataset!\n')
 
     print('init Server and Nodes..')
