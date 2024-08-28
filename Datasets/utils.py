@@ -252,3 +252,16 @@ def load_kiiti_intrinsics(filename):
     focalx, focaly, centerx, centery = float(cam_intrinsics[0]), float(cam_intrinsics[5]), float(cam_intrinsics[2]), float(cam_intrinsics[6])
 
     return focalx, focaly, centerx, centery
+
+# ======= dataset preprocessing =======
+#XXX 어차피 tartanAir만 쓸거면 필요없음.
+def dataset_intrinsics(dataset='tartanair'):
+    if dataset == 'kitti':
+        focalx, focaly, centerx, centery = 707.0912, 707.0912, 601.8873, 183.1104
+    elif dataset == 'euroc':
+        focalx, focaly, centerx, centery = 458.6539916992, 457.2959899902, 367.2149963379, 248.3750000000
+    elif dataset == 'tartanair':
+        focalx, focaly, centerx, centery = 320.0, 320.0, 320.0, 240.0
+    else:
+        return None
+    return focalx, focaly, centerx, centery
