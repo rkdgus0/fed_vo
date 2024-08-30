@@ -5,29 +5,26 @@ import random
 from Library.train import flow_train, flowpose_train, whole_train
 
 class SERVER():
-    def __init__(self, model, nodes, NUM_NODE, test_data, avg_method='fedavg', num_node_data=None):
+    def __init__(self, model, nodes, NUM_NODE, test_data, iteration, avg_method='fedavg', num_node_data=None):
         super(SERVER, self).__init__()
         self.model = model
         self.NUM_NODE = NUM_NODE
         self.nodes = nodes
         self.test_data = test_data
         self.avg_method = avg_method
+        self.iteration = iteration
         self.num_node_data = copy.deepcopy(num_node_data)
 
     # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average하는 코드
     #TODO 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
     def train(self):
+        model_parameter = self.model.state_dict()
         uploaded_models = []
         participating_node = []
 
         for train_type in ['flow', 'flowpose', 'whole']:
             for node_idx in range(self.NUM_NODE):
-                if train_type == 'flow':
-                    self.nodes.flow_train(node_idx, local_epoch)
-                elif train_type == 'flowpose':
-                    self.nodes.flowpose_train(node_idx, local_epoch)
-                elif train_type == 'whole':
-                    self.nodes.whole_train(node_idx, local_epoch)
+                self.nodes.train(node_idx, train_type, self.iteration, model_parameter)
                 participating_node.append(node_idx)
                 uploaded_models.append(copy.deepcopy(self.nodes.model.state_dict()))
 

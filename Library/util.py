@@ -10,7 +10,7 @@ from sklearn.utils import shuffle
 def compose_server(args, model, nodes, test_data):
     NUM_NODE = args.node_num
     avg_method = args.avg_method
-    num_node_data = []
+    iteration = args.iteration
     #TODO num_node_data를 받아오는 코드 구성(형태: [node1_data_num, node2_data_num,...])
 
     return SERVER(model, nodes, NUM_NODE, test_data, avg_method, num_node_data)
