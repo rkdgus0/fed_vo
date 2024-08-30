@@ -9,7 +9,7 @@ import cv2
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer
+from Datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
 from Datasets.transformation import pos_quats2SEs, pose2motion, SEs2ses
 
 # root_dir (str): 데이터셋의 루트 디렉토리 경로
@@ -18,13 +18,15 @@ from Datasets.transformation import pos_quats2SEs, pose2motion, SEs2ses
 # transform (callable, optional): 이미지에 적용할 변환 함수
 # mode(easy, hard, both): 데이터 사용 방법 (Easy/Hard/Both of Easy and Hard)
 class TartanAirDataset(Dataset):
-    def __init__(self, root_dir, mode, environments=None, transform=None):
+    def __init__(self, data_name, root_dir, mode, environments=None, transform=None):
+        self.data_name = data_name
         self.root_dir = root_dir
         self.transform = transform
-        self.data = {}
+        self.motions = []
+        self.image_files = []
         
-        #self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics('tartanair')
-        self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
+        self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics(self.data_name)
+        #self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
         
         if mode.lower() == 'easy':
             self.mode = 'Easy'
@@ -43,53 +45,44 @@ class TartanAirDataset(Dataset):
             image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
             pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
 
-            self.data[environment] = {'images': [], 'motions': []}
-            
             for image_dir, pose_file in zip(image_dirs, pose_files):
                 image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
+                self.image_files.extend(image_files)
+
+                # pose list to motion and matrix
                 poselist = np.loadtxt(pose_file).astype(np.float32)
-                assert(poselist.shape[1] == 7)
-                
+                assert(poselist.shape[1]==7)
                 poses = pos_quats2SEs(poselist)
                 matrix = pose2motion(poses)
                 motions = SEs2ses(matrix).astype(np.float32)
-                
-                self.data[environment]['images'].extend(image_files)
-                self.data[environment]['motions'].extend(motions)
+                self.motions.extend(motions)
         
     def __len__(self):
-        return sum(len(data['images']) - 1 for data in self.data.values())
+        return len(self.image_files) - 1
 
-    #XXX 환경별로 따로 traindataset을 가져야하나?
     def __getitem__(self, idx):
-        env_names = list(self.data.keys())
-        total_images = 0
-        for env in env_names:
-            num_images = len(self.data[env]['images']) - 1
-            if total_images + num_images >= idx:
-                env = env
-                local_idx = idx - total_images
-                break
-            total_images += num_images
-        
-        img_path1 = self.data[env]['images'][local_idx].strip()
-        img_path2 = self.data[env]['images'][local_idx + 1].strip()
-        motion = self.data[env]['motions'][local_idx]
-        
+        img_path1 = self.image_files[idx].strip()
+        img_path2 = self.image_files[idx+1].strip()
+
         img1 = cv2.imread(img_path1)
         img2 = cv2.imread(img_path2)
 
         h, w, _ = img1.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.focalx, self.focaly, self.centerx, self.centery)
         
-        res = {'img1': img1, 'img2': img2, 'motion': motion, 'intrinsic': intrinsicLayer}
+        res = {'img1': img1, 'img2': img2, 'intrinsic': intrinsicLayer}
         
         if self.transform:
             res = self.transform(res)
         
-        return res
+        if self.motions is None:
+            return res
+        
+        else:
+            res['motion'] = self.motions[idx]
+            return res
 
-def initial_dataset(root_dir, mode, node_num, transform, test_environments=['ocean', 'amusement']):
+def initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments=['ocean', 'amusement']):
     """
     Returns:
         tuple: (train_dataset, test_dataset)으로 분할된 데이터셋
@@ -98,7 +91,7 @@ def initial_dataset(root_dir, mode, node_num, transform, test_environments=['oce
     """
     
     # test dataset
-    test_dataset = TartanAirDataset(root_dir=root_dir, mode=mode, environments=test_environments, transform=transform)
+    test_dataset = TartanAirDataset(data_name=data_name, root_dir=root_dir, mode=mode, environments=test_environments, transform=transform)
     
     # train dataset
     # node에 순차적으로 배정(환견 개수가 node 수보다 적으면 에러 반출)
@@ -114,7 +107,7 @@ def initial_dataset(root_dir, mode, node_num, transform, test_environments=['oce
         node_index = i % node_num
         node_env_mapping[node_index].append(environment)
     
-    train_datasets = [TartanAirDataset(root_dir=root_dir, mode=mode, environments=node_envs, transform=transform)
+    train_datasets = [TartanAirDataset(data_name=data_name, root_dir=root_dir, mode=mode, environments=node_envs, transform=transform)
                       for node_envs in node_env_mapping if node_envs]
     
     return train_datasets, test_dataset, node_env_mapping
@@ -122,14 +115,16 @@ def initial_dataset(root_dir, mode, node_num, transform, test_environments=['oce
 #테스트용
 if __name__ == '__main__':
 
+    data_name = 'tartanair'
     root_dir = '../data/tartanAir'
     mode = 'both'
-    node_num = 2
+    node_num = 3
     transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])
     test_environments = ['ocean']
-
-    train, test, env = initial_dataset(root_dir, mode, node_num, transform, test_environments)
     
+
+    train, test, env = initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments)
+    print(f'Node num: {len(train)}')
     for i, train_dataset in enumerate(train):
         print(f"Node {i+1} Train dataset size: {len(train_dataset)}")
         print(f"Node {i+1} Train dataset environment name: {env[i]}")

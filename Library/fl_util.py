@@ -1,25 +1,50 @@
+import os
+import sys
+#sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
 import random
 import torch
 import numpy as np
 
+from torch.optim.lr_scheduler import LambdaLR
+
+from Network.VONet import VONet
 from component.NODE import NODE
 from component.SERVER import SERVER
-from sklearn.utils import shuffle
 
 # ===== SERVER/NODE Compose function =====
-def compose_server(args, model, nodes, test_data):
+def compose_server(args, model, nodes, test_data, train_data):
     NUM_NODE = args.node_num
     avg_method = args.avg_method
-    iteration = args.iteration
-    #TODO num_node_data를 받아오는 코드 구성(형태: [node1_data_num, node2_data_num,...])
+    iteration = args.local_iteration
+    num_node_data = []
+    for node_idx in range(len(train_data)):
+        num_node_data.append = len(train_data[node_idx])
 
-    return SERVER(model, nodes, NUM_NODE, test_data, avg_method, num_node_data)
+    return SERVER(model, nodes, NUM_NODE, test_data, iteration, avg_method, num_node_data)
 
 def compose_node(args, model, scheduler, splited_datasets):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    return NODE(model, scheduler, init_lr=args.learning_rate, datasets=splited_datasets, epochs=args.n_epochs, 
-                batch_size=args.batch_size, device=device)
+    return NODE(model, scheduler, init_lr=args.learning_rate, datasets=splited_datasets, iteration=args.local_iteration, 
+                batch_size=args.batch_size, worker_num=args.worker_num, device=device)
+
+#FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
+def lambda_controller(args, current_round):
+        if current_round < 0.5 * args.globla_round:
+            return 1.0
+        elif current_round < 0.875 * args.globla_round:
+            return 0.2
+        else:
+            return 0.04
+
+def init_model(optimizer, lr):
+    model = torch.nn.DataParallel(VONet())
+    if optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=lr)
+    
+    scheduler = LambdaLR(optimizer, lr_lambda=lambda_controller)
+    return model, optimizer, scheduler
 
 
 # ===== Dataset Preprocessing =====
