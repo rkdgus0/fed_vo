@@ -116,7 +116,7 @@ def initial_dataset(data_name, root_dir, mode, node_num, transform, test_environ
 if __name__ == '__main__':
 
     data_name = 'tartanair'
-    root_dir = '../data/tartanAir'
+    root_dir = '../../data/tartanAir'
     mode = 'both'
     node_num = 3
     transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])

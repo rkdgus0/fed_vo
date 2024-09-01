@@ -127,8 +127,8 @@ class ToTensor(object):
 
             if len(data.shape) == 3 and data.shape[0]==3: # normalization of rgb images
                 data = data/255.0
-            
-            sample[kk] = torch.from_numpy(data.copy()) # copy to make memory continuous
+
+            sample[kk] = torch.from_numpy(np.array(data).copy()) # copy to make memory continuous
 
         return sample
 

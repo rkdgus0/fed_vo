@@ -90,6 +90,7 @@ if __name__ == '__main__':
     test_environments = ['ocean']
     train_type = 'whole'
     iteration = 3
+
     def lambda_controller(current_round):
         if current_round < 0.5 * 100:
             return 1.0
@@ -106,8 +107,8 @@ if __name__ == '__main__':
     #Node = compose_node(args, model, optimizer, scheduler, train_data)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=4, worker_num=1, device=device)
     model_parameter = model.state_dict()
+    Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=4, worker_num=1, device=device)
 
     print(f'Node num: {len(train_data)}')
     for node_idx, train_dataset in enumerate(train_data):
