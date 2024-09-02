@@ -46,6 +46,37 @@ def process_pose_sample(model, sample, device_id):
     
     return total_loss, trans_loss, rot_loss
 
+def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
+    """
+    예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산
+    
+    Args:
+        pose_pred (torch.Tensor): 예측된 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
+        pose_gt (torch.Tensor): 그라운드 트루스 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
+        trans_weight (float): 변환 손실 가중치
+        rot_weight (float): 회전 손실 가중치
+    
+    Returns:
+        tuple: (total_loss, trans_loss, rot_loss)
+    """
+    trans_pred = pose_pred[:, :3]
+    rot_pred = pose_pred[:, 3:]
+    
+    trans_gt = pose_gt[:, :3]
+    rot_gt = pose_gt[:, 3:]
+    
+    # trans loss
+    trans_loss_fn = nn.MSELoss()
+    trans_loss = trans_loss_fn(trans_pred, trans_gt)
+    
+    # rotation loss
+    rot_loss_fn = nn.MSELoss()
+    rot_loss = rot_loss_fn(rot_pred, rot_gt)
+    
+    total_loss = trans_weight * trans_loss + rot_weight * rot_loss
+    
+    return total_loss, trans_loss, rot_loss
+
 def process_whole_sample(model,sample,lambda_flow,device_id):
     sample = {k: v.to(device_id) for k, v in sample.items()} 
     # inputs-------------------------------------------------------------------
@@ -117,39 +148,7 @@ def process_flowpose_sample(model,sample,device_id):
 
     return pose_loss,trans_loss,rot_loss'''
 
-def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
-    """
-    예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산
-    
-    Args:
-        pose_pred (torch.Tensor): 예측된 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
-        pose_gt (torch.Tensor): 그라운드 트루스 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
-        trans_weight (float): 변환 손실 가중치
-        rot_weight (float): 회전 손실 가중치
-    
-    Returns:
-        tuple: (total_loss, trans_loss, rot_loss)
-    """
-    # 변환 및 회전 부분 분리
-    trans_pred = pose_pred[:, :3]
-    rot_pred = pose_pred[:, 3:]
-    
-    trans_gt = pose_gt[:, :3]
-    rot_gt = pose_gt[:, 3:]
-    
-    # 변환 손실 계산 (MSE Loss)
-    trans_loss_fn = nn.MSELoss()
-    trans_loss = trans_loss_fn(trans_pred, trans_gt)
-    
-    # 회전 손실 계산 (MSE Loss)
-    # 회전 부분은 각도(rad)로 표현된다고 가정
-    rot_loss_fn = nn.MSELoss()
-    rot_loss = rot_loss_fn(rot_pred, rot_gt)
-    
-    # 총 손실 계산
-    total_loss = trans_weight * trans_loss + rot_weight * rot_loss
-    
-    return total_loss, trans_loss, rot_loss
+
 
 
 def test_pose_batch(model, sample):
