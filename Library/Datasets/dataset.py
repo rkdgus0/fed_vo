@@ -41,9 +41,13 @@ class TartanAirDataset(Dataset):
             environments = [env for env in environments if os.path.exists(os.path.join(root_dir, env))]
 
         for environment in environments:
+            #test data
             env_path = os.path.join(root_dir, environment)
-            image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
-            pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
+            image_dirs = glob.glob(os.path.join(env_path, self.mode, 'P001/image_left'))
+            pose_files = glob.glob(os.path.join(env_path, self.mode, 'P001/pose_left.txt'))
+            #full data
+            #image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
+            #pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
 
             for image_dir, pose_file in zip(image_dirs, pose_files):
                 image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
@@ -56,6 +60,8 @@ class TartanAirDataset(Dataset):
                 matrix = pose2motion(poses)
                 motions = SEs2ses(matrix).astype(np.float32)
                 self.motions.extend(motions)
+                assert(len(self.motions) == len(self.image_files))-1
+            print(f"[{environment}] motion len: {len(self.motions)}, img len: {len(self.image_files)}")
         
     def __len__(self):
         return len(self.image_files) - 1
@@ -116,17 +122,19 @@ def initial_dataset(data_name, root_dir, mode, node_num, transform, test_environ
 if __name__ == '__main__':
 
     data_name = 'tartanair'
-    root_dir = '../../data/tartanAir'
-    mode = 'both'
-    node_num = 3
+    root_dir = '/scratch/jeongeon/tartanAir'
+    mode = 'easy'
+    node_num = 17
     transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])
-    test_environments = ['ocean']
+    test_environments = ['ocean','zipfile']
     
-
+    print("Init Datasets...")
     train, test, env = initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments)
+    print("Success to Init Datasets...")
     print(f'Node num: {len(train)}')
     for i, train_dataset in enumerate(train):
         print(f"Node {i+1} Train dataset size: {len(train_dataset)}")
         print(f"Node {i+1} Train dataset environment name: {env[i]}")
 
     print(f"Test dataset size: {len(test)}")
+    print(f"Test dataset environment name: {test_environments}")

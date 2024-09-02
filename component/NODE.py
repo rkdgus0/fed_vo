@@ -9,20 +9,20 @@ import torch.optim as optim
 import torch.nn as nn
 import numpy as np
 from torch.utils.data import DataLoader
-from Library.train_util import process_whole_sample
+from Library.train_util import process_pose_sample
 from copy import deepcopy
 
 class NODE():
     def __init__(self, model, scheduler, init_lr, datasets, iteration, batch_size, worker_num, device='cuda:0'):
         super(NODE, self).__init__()
         self.datasets = datasets
-        self.scheduler = deepcopy(scheduler)
         self.iteration = iteration
         self.batch_size = batch_size
         self.worker_num = worker_num
         self.device = device
         self.model = deepcopy(model).to(device)
         self.optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=init_lr)
+        self.scheduler = deepcopy(scheduler)
         self.criterion = nn.CrossEntropyLoss()
         
 
@@ -31,23 +31,26 @@ class NODE():
 
         # setting node's train data
         train_data = self.datasets[node_idx]
-        trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.worker_num)
+        trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True, num_workers=self.worker_num)
         #trainDataiter = iter(trainDataloader)
 
         for curr_iter in range(iteration):
+            print(f"Node {node_idx}, Iteration {curr_iter+1}/{self.iteration} Start!")
             for sample in trainDataloader:
                 self.model.train()
                 self.optimizer.zero_grad()
 
                 if mode == 'whole':
-                    loss = process_whole_sample(self.model, sample, self.device)
-                    loss.backward()
+                    total_loss,trans_loss,rot_loss = process_pose_sample(self.model, sample, self.device)
+                    total_loss.backward()
+                    
+                    # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
 
                 self.optimizer.step()
                 self.scheduler.step()
         
-            print(f"Node {node_idx}, Iteration {curr_iter+1}/{self.iteration}, Loss: {loss.item()}")
-            print(f"model_parameter: {model.state_dict()}")
+            print(f"Node {node_idx}, Iteration {curr_iter+1}/{self.iteration}, Loss: {total_loss.item()}")
+            #print(f"model_parameter: {model.state_dict()}")
 
 
         
@@ -83,11 +86,11 @@ from torch.optim.lr_scheduler import LambdaLR
 
 if __name__ == '__main__':
     data_name = 'tartanair'
-    root_dir = '../data/tartanAir'
-    mode = 'both'
-    node_num = 3
+    root_dir = '/scratch/jeongeon/tartanAir'
+    mode = 'easy'
+    node_num = 17
     transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])
-    test_environments = ['ocean']
+    test_environments = ['ocean', 'zipfile']
     train_type = 'whole'
     iteration = 3
 
@@ -103,18 +106,25 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=0.01)
     scheduler = LambdaLR(optimizer, lr_lambda=lambda_controller)
 
+    print("Init Dataset...")
     train_data, test_data, node_envs = initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments)
+    print("Success to init dataset!\n")
+
+    print("Init model parameter...")
     #Node = compose_node(args, model, optimizer, scheduler, train_data)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
+    
     model_parameter = model.state_dict()
+    print("Success to init model parameter!\n")
+
+    print("Init Node component...")
     Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=4, worker_num=1, device=device)
 
-    print(f'Node num: {len(train_data)}')
+    '''print(f'Node num: {len(train_data)}')
     for node_idx, train_dataset in enumerate(train_data):
         print(f"Node {node_idx+1} Train dataset size: {len(train_dataset)}")
         print(f"Node {node_idx+1} Train dataset environment name: {node_envs[node_idx]}")
         Node.train(node_idx, train_type, iteration, model_parameter)
 
-    print(f"Test dataset size: {len(test_data)}")
+    print(f"Test dataset size: {len(test_data)}")'''
     

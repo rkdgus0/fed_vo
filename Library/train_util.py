@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 def save_checkpoint(model, optimizer, scheduler,  iteration, filepath):
     torch.save({
@@ -20,6 +21,30 @@ def load_checkpoint(model, optimizer=None, scheduler=None, filepath="",map_locat
     iteration = checkpoint['iteration']
     print(f"successfully load model from {filepath}")
     return iteration
+    
+def process_pose_sample(model, sample, device_id):
+    """
+    모델과 샘플을 받아서 예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산하는 함수
+    
+    Args:
+        model (nn.Module): VONet 모델
+        sample (dict): 배치 샘플로, 'img1', 'img2', 'intrinsic', 'motion' 키를 포함
+        device (torch.device): 연산에 사용할 디바이스(CPU 또는 GPU)
+    
+    Returns:
+        tuple: (total_loss, trans_loss, rot_loss)
+    """
+    img1 = sample['img1'].to(device_id)         # [B, 3, H, W]
+    img2 = sample['img2'].to(device_id)         # [B, 3, H, W]
+    intrinsic = sample['intrinsic'].to(device_id)  # [B, 3, 3]
+    motion_gt = sample['motion'].to(device_id)  # [B, 6] -> [tx, ty, tz, rx, ry, rz]
+    
+    model_output = model([img1, img2, intrinsic])
+    flow_pred, pose_pred = model_output      # flow_pred: [B, 2, H, W], pose_pred: [B, 6]
+    
+    total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
+    
+    return total_loss, trans_loss, rot_loss
 
 def process_whole_sample(model,sample,lambda_flow,device_id):
     sample = {k: v.to(device_id) for k, v in sample.items()} 
@@ -71,7 +96,7 @@ def process_flowpose_sample(model,sample,device_id):
     
     return total_loss,trans_loss,rot_loss
 
-def calculate_pose_loss( relative_motion, motions_gt,device_id='cuda:0'):
+'''def calculate_pose_loss( relative_motion, motions_gt,device_id='cuda:0'):
     
     # Translation loss with normalization
     epsilon = 1e-6
@@ -90,7 +115,42 @@ def calculate_pose_loss( relative_motion, motions_gt,device_id='cuda:0'):
     pose_loss = trans_loss + rot_loss
 
 
-    return pose_loss,trans_loss,rot_loss
+    return pose_loss,trans_loss,rot_loss'''
+
+def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
+    """
+    예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산
+    
+    Args:
+        pose_pred (torch.Tensor): 예측된 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
+        pose_gt (torch.Tensor): 그라운드 트루스 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
+        trans_weight (float): 변환 손실 가중치
+        rot_weight (float): 회전 손실 가중치
+    
+    Returns:
+        tuple: (total_loss, trans_loss, rot_loss)
+    """
+    # 변환 및 회전 부분 분리
+    trans_pred = pose_pred[:, :3]
+    rot_pred = pose_pred[:, 3:]
+    
+    trans_gt = pose_gt[:, :3]
+    rot_gt = pose_gt[:, 3:]
+    
+    # 변환 손실 계산 (MSE Loss)
+    trans_loss_fn = nn.MSELoss()
+    trans_loss = trans_loss_fn(trans_pred, trans_gt)
+    
+    # 회전 손실 계산 (MSE Loss)
+    # 회전 부분은 각도(rad)로 표현된다고 가정
+    rot_loss_fn = nn.MSELoss()
+    rot_loss = rot_loss_fn(rot_pred, rot_gt)
+    
+    # 총 손실 계산
+    total_loss = trans_weight * trans_loss + rot_weight * rot_loss
+    
+    return total_loss, trans_loss, rot_loss
+
 
 def test_pose_batch(model, sample):
     model.eval()

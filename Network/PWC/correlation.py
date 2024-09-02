@@ -2,11 +2,10 @@
 
 import torch
 
-#import cupy
-#import re
+import cupy
+import re
 
-#kernel_Correlation_rearrange = 
-'''
+kernel_Correlation_rearrange = '''
 	extern "C" __global__ void kernel_Correlation_rearrange(
 		const int n,
 		const float* input,
@@ -33,8 +32,7 @@ import torch
 	}
 '''
 
-#kernel_Correlation_updateOutput = 
-'''
+kernel_Correlation_updateOutput = '''
 	extern "C" __global__ void kernel_Correlation_updateOutput(
 	  const int n,
 	  const float* rbot0,
@@ -104,8 +102,7 @@ import torch
 	}
 '''
 
-#kernel_Correlation_updateGradFirst = 
-'''
+kernel_Correlation_updateGradFirst = '''
 	#define ROUND_OFF 50000
 
 	extern "C" __global__ void kernel_Correlation_updateGradFirst(
@@ -169,8 +166,7 @@ import torch
 	} }
 '''
 
-#kernel_Correlation_updateGradSecond = 
-'''
+kernel_Correlation_updateGradSecond = '''
 	#define ROUND_OFF 50000
 
 	extern "C" __global__ void kernel_Correlation_updateGradSecond(
@@ -235,7 +231,7 @@ import torch
 	  gradSecond[bot1index + intSample*SIZE_1(gradSecond)*SIZE_2(gradSecond)*SIZE_3(gradSecond)] = sum / (float)sumelems;
 	} }
 '''
-'''
+
 def cupy_kernel(strFunction, objVariables):
 	strKernel = globals()[strFunction]
 
@@ -274,9 +270,9 @@ def cupy_kernel(strFunction, objVariables):
 	return strKernel
 # end
 
-@cupy.util.memoize(for_each_device=True)
+# @cupy.util.memoize(for_each_device=True)
 def cupy_launch(strFunction, strKernel):
-	return cupy.cuda.compile_with_cache(strKernel).get_function(strFunction)
+	return cupy.RawKernel(strKernel, strFunction)
 # end
 
 class _FunctionCorrelation(torch.autograd.Function):
@@ -399,76 +395,3 @@ class ModuleCorrelation(torch.nn.Module):
 		return _FunctionCorrelation.apply(tenFirst, tenSecond)
 	# end
 # end
-'''
-
-
-class _FunctionCorrelation(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, first, second):
-        # 필요한 변수를 저장합니다.
-        ctx.save_for_backward(first, second)
-        
-        # 아웃풋 텐서의 크기를 설정합니다.
-        output = torch.zeros(first.size(0), 81, first.size(2), first.size(3), device=first.device)
-        
-        # rearrange 과정을 직접 구현합니다.
-        rbot0 = torch.nn.functional.pad(first, (4, 4, 4, 4))
-        rbot1 = torch.nn.functional.pad(second, (4, 4, 4, 4))
-
-        # 커널의 모든 위치에 대한 상관관계를 계산합니다.
-        for b in range(first.size(0)):
-            for i in range(first.size(2)):
-                for j in range(first.size(3)):
-                    patch0 = rbot0[b, :, i:i+9, j:j+9].view(first.size(1), -1)
-                    for di in range(-4, 5):
-                        for dj in range(-4, 5):
-                            i_shift = i + di
-                            j_shift = j + dj
-                            if i_shift >= 0 and i_shift < first.size(2) and j_shift >= 0 and j_shift < first.size(3):
-                                patch1 = rbot1[b, :, i_shift:i_shift+9, j_shift:j_shift+9].view(first.size(1), -1)
-                                corr_value = torch.sum(patch0 * patch1, dim=1)
-                                idx = (di + 4) * 9 + (dj + 4)
-                                output[b, idx, i, j] = corr_value.mean()
-
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        first, second = ctx.saved_tensors
-
-        grad_first = torch.zeros_like(first) if ctx.needs_input_grad[0] else None
-        grad_second = torch.zeros_like(second) if ctx.needs_input_grad[1] else None
-
-        rbot0 = torch.nn.functional.pad(first, (4, 4, 4, 4))
-        rbot1 = torch.nn.functional.pad(second, (4, 4, 4, 4))
-
-        for b in range(first.size(0)):
-            for i in range(first.size(2)):
-                for j in range(first.size(3)):
-                    patch0 = rbot0[b, :, i:i+9, j:j+9].view(first.size(1), -1)
-                    for di in range(-4, 5):
-                        for dj in range(-4, 5):
-                            i_shift = i + di
-                            j_shift = j + dj
-                            if i_shift >= 0 and i_shift < first.size(2) and j_shift >= 0 and j_shift < first.size(3):
-                                patch1 = rbot1[b, :, i_shift:i_shift+9, j_shift:j_shift+9].view(first.size(1), -1)
-                                idx = (di + 4) * 9 + (dj + 4)
-                                corr_grad = grad_output[b, idx, i, j]
-
-                                if grad_first is not None:
-                                    grad_first[b, :, i:i+9, j:j+9] += corr_grad * patch1.view_as(rbot0[b, :, i:i+9, j:j+9])
-
-                                if grad_second is not None:
-                                    grad_second[b, :, i_shift:i_shift+9, j_shift:j_shift+9] += corr_grad * patch0.view_as(rbot1[b, :, i_shift:i_shift+9, j_shift:j_shift+9])
-
-        return grad_first, grad_second
-
-def FunctionCorrelation(tenFirst, tenSecond):
-    return _FunctionCorrelation.apply(tenFirst, tenSecond)
-
-class ModuleCorrelation(torch.nn.Module):
-    def __init__(self):
-        super(ModuleCorrelation, self).__init__()
-
-    def forward(self, tenFirst, tenSecond):
-        return FunctionCorrelation(tenFirst, tenSecond)
