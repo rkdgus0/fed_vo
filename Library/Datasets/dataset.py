@@ -24,6 +24,7 @@ class TartanAirDataset(Dataset):
         self.transform = transform
         self.motions = []
         self.image_files = []
+        self.sequence_starts = []
         
         self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics(self.data_name)
         #self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
@@ -51,6 +52,8 @@ class TartanAirDataset(Dataset):
 
             for image_dir, pose_file in zip(image_dirs, pose_files):
                 image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
+                start_idx = len(self.image_files)  # 시퀀스 시작 위치
+                self.sequence_starts.append(start_idx)
                 self.image_files.extend(image_files)
 
                 # pose list to motion and matrix
@@ -60,13 +63,17 @@ class TartanAirDataset(Dataset):
                 matrix = pose2motion(poses)
                 motions = SEs2ses(matrix).astype(np.float32)
                 self.motions.extend(motions)
-                assert(len(self.motions) == len(self.image_files))-1
+                self.motions.append(motions[-1]) #더미 값 추가
+                assert(len(self.motions) == len(self.image_files))
+                
             print(f"[{environment}] motion len: {len(self.motions)}, img len: {len(self.image_files)}")
         
     def __len__(self):
-        return len(self.image_files) - 1
+        return max(len(self.image_files)-1, 0)
 
     def __getitem__(self, idx):
+        if idx in self.sequence_starts and idx > 0:
+            idx += 1
         img_path1 = self.image_files[idx].strip()
         img_path2 = self.image_files[idx+1].strip()
 

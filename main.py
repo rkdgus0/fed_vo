@@ -110,22 +110,7 @@ if __name__ == '__main__':
         #TODO 밑의 코드는 train 코드니까 따로 함수로 빼두기. 아마 Library/util에 만들기
         Server.train()
 
-        '''for posefile in posefiles:
-            posefile = posefile.strip()
-            print(posefile)
-            #transform = Compose([CropCenter((args.image_height, args.image_width)), DownscaleFlow(), ToTensor()])
-            #trainDataset = TartanDataset( posefile = posefile, transform=transform, 
-            #                                    focalx=focalx, focaly=focaly, centerx=centerx, centery=centery)
-            
-            #trainDataloader = DataLoader(trainDataset, batch_size=args.batch_size, shuffle=False, num_workers=args.worker_num)
-            #trainDataiter = iter(trainDataloader)
-
-            for batch_idx, sample in enumerate(trainDataiter):
-                total_loss,flow_loss,pose_loss,trans_loss,rot_loss = train_pose_batch(model, optimizer, sample)
-                iteration += 1
-                scheduler.step()
-
-            if round % 10 == 0:
+            if round % 5 == 0:
                 summaryWriter.add_scalar('Loss/train_total', total_loss, round)
                 summaryWriter.add_scalar('Loss/train_flow', flow_loss, round)
                 summaryWriter.add_scalar('Loss/train_pose', pose_loss, round)
@@ -134,7 +119,7 @@ if __name__ == '__main__':
                 print(f"Epoch {round + 1}, Loss: {total_loss}")
                 print(f"Flow Loss: {flow_loss}")
                 print(f"Pose Loss: {pose_loss}")
-'''
+                
         model_save_path = f'models/exp_{EXP_NAME}.pth'
         #save_checkpoint(model.vonet, optimizer, scheduler, round, iteration, model_save_path)
 

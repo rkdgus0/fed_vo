@@ -127,30 +127,6 @@ def process_flowpose_sample(model,sample,device_id):
     
     return total_loss,trans_loss,rot_loss
 
-'''def calculate_pose_loss( relative_motion, motions_gt,device_id='cuda:0'):
-    
-    # Translation loss with normalization
-    epsilon = 1e-6
-    T_pred = relative_motion[:, :3]
-    T_gt = motions_gt[:, :3]
-    T_pred_norm = T_pred / torch.max(torch.norm(T_pred, dim=1, keepdim=True), torch.tensor(epsilon).to(device_id))
-    T_gt_norm = T_gt / torch.max(torch.norm(T_gt, dim=1, keepdim=True), torch.tensor(epsilon).to(device_id))
-    trans_loss = torch.nn.functional.mse_loss(T_pred_norm, T_gt_norm)
-    
-    # Simple Rotation loss
-    R_pred = relative_motion[:, 3:]
-    R_gt = motions_gt[:, 3:]
-    rot_loss = torch.nn.functional.mse_loss(R_pred, R_gt)
-
-    # Overall motion loss
-    pose_loss = trans_loss + rot_loss
-
-
-    return pose_loss,trans_loss,rot_loss'''
-
-
-
-
 def test_pose_batch(model, sample):
     model.eval()
     # inputs-------------------------------------------------------------------

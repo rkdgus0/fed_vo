@@ -31,11 +31,11 @@ class NODE():
 
         # setting node's train data
         train_data = self.datasets[node_idx]
-        trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True, num_workers=self.worker_num)
+        trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.worker_num)
         #trainDataiter = iter(trainDataloader)
 
         for curr_iter in range(iteration):
-            print(f"Node {node_idx}, Iteration {curr_iter+1}/{self.iteration} Start!")
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
             for sample in trainDataloader:
                 self.model.train()
                 self.optimizer.zero_grad()
@@ -47,9 +47,11 @@ class NODE():
                     # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
 
                 self.optimizer.step()
-                self.scheduler.step()
-        
-            print(f"Node {node_idx}, Iteration {curr_iter+1}/{self.iteration}, Loss: {total_loss.item()}")
+            
+                #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
+            self.scheduler.step()
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Total Loss: {total_loss.item()}")
+            
 
     def set_lr(self, lr):
         for param_group in self.optimizer.param_groups:
@@ -70,7 +72,9 @@ if __name__ == '__main__':
     transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])
     test_environments = ['ocean', 'zipfile']
     train_type = 'whole'
-    iteration = 3
+    iteration = 1
+    batch_size = 64
+    worker = 4
 
     def lambda_controller(current_round):
         if current_round < 0.5 * 100:
@@ -79,7 +83,8 @@ if __name__ == '__main__':
             return 0.2
         else:
             return 0.04
-        
+    
+    torch.cuda.empty_cache()
     model = torch.nn.DataParallel(VONet())
     optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=0.01)
     scheduler = LambdaLR(optimizer, lr_lambda=lambda_controller)
@@ -96,13 +101,16 @@ if __name__ == '__main__':
     print("Success to init model parameter!\n")
 
     print("Init Node component...")
-    Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=4, worker_num=1, device=device)
+    Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=batch_size, worker_num=worker, device=device)
 
-    '''print(f'Node num: {len(train_data)}')
+    print(f'Node num: {len(train_data)}')
     for node_idx, train_dataset in enumerate(train_data):
-        print(f"Node {node_idx+1} Train dataset size: {len(train_dataset)}")
-        print(f"Node {node_idx+1} Train dataset environment name: {node_envs[node_idx]}")
-        Node.train(node_idx, train_type, iteration, model_parameter)
+        if len(train_dataset) > 0:
+            print(f"Node {node_idx+1} Train dataset size: {len(train_dataset)}")
+            print(f"Node {node_idx+1} Train dataset environment name: {node_envs[node_idx]}")
+            Node.train(node_idx, train_type, iteration, model_parameter)
+        else:
+            pass
 
-    print(f"Test dataset size: {len(test_data)}")'''
+    print(f"Test dataset size: {len(test_data)}")
     

@@ -17,11 +17,12 @@ def compose_server(args, model, nodes, test_data, train_data):
     NUM_NODE = args.node_num
     avg_method = args.avg_method
     iteration = args.local_iteration
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     num_node_data = []
-    for node_idx in range(len(train_data)):
+    for node_idx, _ in enumerate(train_data):
         num_node_data.append = len(train_data[node_idx])
 
-    return SERVER(model, nodes, NUM_NODE, test_data, iteration, avg_method, num_node_data)
+    return SERVER(model, nodes, NUM_NODE, test_data, iteration, avg_method, num_node_data, device=device)
 
 def compose_node(args, model, scheduler, splited_datasets):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
