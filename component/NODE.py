@@ -13,7 +13,7 @@ from Library.train_util import process_pose_sample
 from copy import deepcopy
 
 class NODE():
-    def __init__(self, model, scheduler, init_lr, datasets, iteration, batch_size, worker_num, device='cuda:0'):
+    def __init__(self, model, optimizer, scheduler, init_lr, datasets, iteration, batch_size, worker_num, device='cuda:0'):
         super(NODE, self).__init__()
         self.datasets = datasets
         self.iteration = iteration
@@ -21,7 +21,7 @@ class NODE():
         self.worker_num = worker_num
         self.device = device
         self.model = deepcopy(model).to(device)
-        self.optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=init_lr)
+        self.optimizer = deepcopy(optimizer)
         self.scheduler = deepcopy(scheduler)
         
 
@@ -35,6 +35,7 @@ class NODE():
 
         for curr_iter in range(iteration):
             #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
+            loss = None
             for sample in trainDataloader:
                 self.model.train()
                 self.optimizer.zero_grad()
@@ -49,7 +50,7 @@ class NODE():
             
                 #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
             self.scheduler.step()
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {loss.item()}")
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {loss}")
             
 
     def set_lr(self, lr):

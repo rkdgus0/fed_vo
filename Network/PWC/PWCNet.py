@@ -134,7 +134,7 @@ class PWCDCNet(nn.Module):
         """
         B, C, H, W = x.size()
         #print(f"x size: {[B, C, H, W]}")
-        flo = flo[:, :, :, :W]
+        #flo = flo[:, :, :, :W]
         # mesh grid 
         xx = torch.arange(0, W).view(1,-1).repeat(H,1)
         yy = torch.arange(0, H).view(-1,1).repeat(1,W)
@@ -198,10 +198,10 @@ class PWCDCNet(nn.Module):
         x = torch.cat((self.conv6_4(x), x),1)
         flow6 = self.predict_flow6(x)
         up_flow6 = self.deconv6(flow6)
-        _, _, _, W = up_flow6.size()
-        up_flow6 = up_flow6[:, :, :, :W-1]
+        #_, _, _, W = up_flow6.size()
+        #up_flow6 = up_flow6[:, :, :, :W-1]
         up_feat6 = self.upfeat6(x)
-        up_feat6 = up_feat6[:, :, :, :W-1]
+        #up_feat6 = up_feat6[:, :, :, :W-1]
 
         
         warp5 = self.warp(c25, up_flow6*0.625)

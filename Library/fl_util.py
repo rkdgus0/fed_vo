@@ -6,28 +6,30 @@ import random
 import torch
 import numpy as np
 
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ExponentialLR
 
 from Network.VONet import VONet
+from Network.PWC import PWCDCNet as FlowNet
+from Network.VOFlowNet import VOFlowRes as FlowPoseNet
+
 from component.NODE import NODE
 from component.SERVER import SERVER
 
 # ===== SERVER/NODE Compose function =====
-def compose_server(args, model, nodes, test_data, train_data):
+def compose_server(args, model, nodes, test_data, train_data, device):
     NUM_NODE = args.node_num
     avg_method = args.avg_method
     iteration = args.local_iteration
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    
     num_node_data = []
-    for node_idx, _ in enumerate(train_data):
-        num_node_data.append = len(train_data[node_idx])
+    for node_idx, train_dataset in enumerate(train_data):
+        num_node_data.append(len(train_dataset))
 
     return SERVER(model, nodes, NUM_NODE, test_data, iteration, avg_method, num_node_data, device=device)
 
-def compose_node(args, model, scheduler, splited_datasets):
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+def compose_node(args, model, optimizer, scheduler, train_data, device):
 
-    return NODE(model, scheduler, init_lr=args.learning_rate, datasets=splited_datasets, iteration=args.local_iteration, 
+    return NODE(model, optimizer, scheduler, init_lr=args.learning_rate, datasets=train_data, iteration=args.local_iteration, 
                 batch_size=args.batch_size, worker_num=args.worker_num, device=device)
 
 #FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
@@ -39,12 +41,21 @@ def lambda_controller(args, current_round):
         else:
             return 0.04
 
-def init_model(optimizer, lr):
-    model = torch.nn.DataParallel(VONet())
-    if optimizer.lower() == 'adam':
-        optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=lr)
+def init_model(model_name, optimizer, lr):
+    if model_name.lower() == 'vonet':
+        model = torch.nn.DataParallel(VONet())
+    elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
+        model = torch.nn.DataParallel(FlowNet())
+    elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
+        model = torch.nn.DataParallel(FlowPoseNet())
     
-    scheduler = LambdaLR(optimizer, lr_lambda=lambda_controller)
+    if optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    elif optimizer.lower() == 'sgd':
+        optimizer = torch.optim.sgd(model.parameters(), lr=lr)
+    
+    scheduler = ExponentialLR(optimizer, gamma=0.95)
+
     return model, optimizer, scheduler
 
 

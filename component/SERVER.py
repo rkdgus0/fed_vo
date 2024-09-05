@@ -28,7 +28,7 @@ class SERVER():
 
         #for train_type in ['whole']:
         for node_idx in range(self.NUM_NODE):
-            self.nodes.train(node_idx, train_type, self.iteration, model_parameter)
+            self.nodes.train(node_idx, self.iteration, model_parameter)
             participating_node.append(node_idx)
             node_state_dict = self.nodes.model.state_dict()
             node_state_dicts.append(node_state_dict)

@@ -42,13 +42,11 @@ class TartanAirDataset(Dataset):
             environments = [env for env in environments if os.path.exists(os.path.join(root_dir, env))]
 
         for environment in environments:
-            #test data
+            #test data: P001
+            #full data: *
             env_path = os.path.join(root_dir, environment)
-            image_dirs = glob.glob(os.path.join(env_path, self.mode, 'P001/image_left'))
-            pose_files = glob.glob(os.path.join(env_path, self.mode, 'P001/pose_left.txt'))
-            #full data
-            #image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
-            #pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
+            image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
+            pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
 
             for image_dir, pose_file in zip(image_dirs, pose_files):
                 image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
