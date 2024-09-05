@@ -23,23 +23,23 @@ class SERVER():
     #TODO 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
     def train(self):
         model_parameter = self.model.state_dict()
-        uploaded_weights = []
+        node_state_dicts = []
         participating_node = []
 
-        for train_type in ['whole']:
-            for node_idx in range(self.NUM_NODE):
-                self.nodes.train(node_idx, train_type, self.iteration, model_parameter)
-                participating_node.append(node_idx)
-                node_state_dict = self.nodes.model.state_dict()
-                uploaded_weights.append(node_state_dict)
+        #for train_type in ['whole']:
+        for node_idx in range(self.NUM_NODE):
+            self.nodes.train(node_idx, train_type, self.iteration, model_parameter)
+            participating_node.append(node_idx)
+            node_state_dict = self.nodes.model.state_dict()
+            node_state_dicts.append(node_state_dict)
 
-            avg_ratio = self.calc_avg_ratio(uploaded_weights, participating_node)
-            avg_ratio_tensor = torch.tensor(avg_ratio, dtype=torch.float32).view(-1, 1, 1, 1, 1)
-            avg_model = self.average_model(uploaded_weights, avg_ratio)
-            self.model.load_state_dict(avg_model)
+        avg_ratio = self.calc_avg_ratio(node_state_dicts, participating_node)
+        #avg_ratio_tensor = torch.tensor(avg_ratio, dtype=torch.float32).view(-1, 1, 1, 1, 1)
+        avg_model = self.average_model(node_state_dicts, avg_ratio)
+        self.model.load_state_dict(avg_model)
 
-            uploaded_weights.clear()
-            avg_model.clear()
+        node_state_dicts.clear()
+        avg_model.clear()
    
    #TODO Test dataset을 이용해서, Global Model의 성능을 확인하는 코드 추가 요망(evaluation code와 동일할 것으로 보임)
     def test(self):
@@ -64,8 +64,7 @@ class SERVER():
         for param_group in self.nodes.optimizer.param_groups:
             param_group['lr'] = lr
 
-    @staticmethod
-    def average_model(state_dicts, avg_ratio):
+    def average_model(self, state_dicts, avg_ratio):
         if len(state_dicts) != len(avg_ratio):
             raise ValueError("The number of state_dicts and avg_ratio must be the same")
 
@@ -87,6 +86,7 @@ from Library.Datasets.dataset_util import ToTensor, Compose, CropCenter, Downsca
 from Library.Datasets.dataset import initial_dataset
 from Network.VONet import VONet
 from torch.optim.lr_scheduler import ExponentialLR
+from time import time
 
 if __name__ == '__main__':
     data_name = 'tartanair'
@@ -110,19 +110,24 @@ if __name__ == '__main__':
     scheduler = ExponentialLR(optimizer, gamma=0.95)
 
     print("Init Dataset...")
+    t1 = time()
     train_data, test_data, node_envs = initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments)
-    for i, train_dataset in enumerate(train_data):
+    '''for i, train_dataset in enumerate(train_data):
         print(f"Node {i+1} Train dataset size: {len(train_dataset)}")
-        print(f"Node {i+1} Train dataset environment name: {node_envs[i]}")
-    print("Success to init dataset!\n")
+        print(f"Node {i+1} Train dataset environment name: {node_envs[i]}")'''
+    t2 = time()
+    print(f"Success to init dataset! Time(sec): {round(t2-t1,2)}\n")
 
     print("Init Node component...")
+    t1 = time()
     Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=batch_size, worker_num=worker, device=device)
     num_node_data = []
     for node_idx, train_dataset in enumerate(train_data):
         num_node_data.append(len(train_dataset))
     Server = SERVER(model, Node, node_num, test_data, iteration, avg_method, num_node_data, device=device)
+    t2 = time()
     print(f'Node num: {len(train_data)}')
+    print(f"Success to init component! Time(sec): {round(t2-t1,2)}\n")
 
     for R in range(global_round):
         print(f"global round {R+1} Start!\n")

@@ -23,10 +23,9 @@ class NODE():
         self.model = deepcopy(model).to(device)
         self.optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=init_lr)
         self.scheduler = deepcopy(scheduler)
-        self.criterion = nn.CrossEntropyLoss()
         
 
-    def train(self, node_idx, mode, iteration, model_parameters):
+    def train(self, node_idx, iteration, model_parameters):
         self.model.load_state_dict(model_parameters) #global model
 
         # setting node's train data
@@ -35,14 +34,14 @@ class NODE():
         #trainDataiter = iter(trainDataloader)
 
         for curr_iter in range(iteration):
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
+            #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
             for sample in trainDataloader:
                 self.model.train()
                 self.optimizer.zero_grad()
 
-                if mode == 'whole':
-                    total_loss,trans_loss,rot_loss = process_pose_sample(self.model, sample, self.device)
-                    total_loss.backward()
+                #if mode == 'whole':
+                loss = process_pose_sample(self.model, sample, self.device)
+                loss.backward()
                     
                     # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
 
@@ -50,7 +49,7 @@ class NODE():
             
                 #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
             self.scheduler.step()
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Total Loss: {total_loss.item()}")
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {loss.item()}")
             
 
     def set_lr(self, lr):

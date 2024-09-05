@@ -32,7 +32,7 @@ def process_pose_sample(model, sample, device_id):
         device (torch.device): 연산에 사용할 디바이스(CPU 또는 GPU)
     
     Returns:
-        tuple: (total_loss, trans_loss, rot_loss)
+        tuple: loss
     """
     img1 = sample['img1'].to(device_id)         # [B, 3, H, W]
     img2 = sample['img2'].to(device_id)         # [B, 3, H, W]
@@ -42,9 +42,12 @@ def process_pose_sample(model, sample, device_id):
     model_output = model([img1, img2, intrinsic])
     flow_pred, pose_pred = model_output      # flow_pred: [B, 2, H, W], pose_pred: [B, 6]
     
-    total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
+    loss_fn = nn.MSELoss()
+    loss = loss_fn(pose_pred, motion_gt)
+
+    #total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
     
-    return total_loss, trans_loss, rot_loss
+    return loss
 
 def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
     """
