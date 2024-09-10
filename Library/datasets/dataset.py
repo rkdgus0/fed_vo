@@ -9,8 +9,8 @@ import cv2
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from Datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
-from Datasets.transformation import pos_quats2SEs, pose2motion, SEs2ses
+from datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
+from datasets.transformation import pos_quats2SEs, pose2motion, SEs2ses
 
 # root_dir (str): 데이터셋의 루트 디렉토리 경로
 # environments (list of str): 사용할 환경 이름 리스트 (ex: ['ocean', 'amusement'])
@@ -45,8 +45,8 @@ class TartanAirDataset(Dataset):
             #test data: P001
             #full data: *
             env_path = os.path.join(root_dir, environment)
-            image_dirs = glob.glob(os.path.join(env_path, self.mode, '*/image_left'))
-            pose_files = glob.glob(os.path.join(env_path, self.mode, '*/pose_left.txt'))
+            image_dirs = glob.glob(os.path.join(env_path, self.mode, 'P001/image_left'))
+            pose_files = glob.glob(os.path.join(env_path, self.mode, 'P001/pose_left.txt'))
 
             for image_dir, pose_file in zip(image_dirs, pose_files):
                 image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
@@ -120,6 +120,8 @@ def initial_dataset(data_name, root_dir, mode, node_num, transform, test_environ
     
     train_datasets = [TartanAirDataset(data_name=data_name, root_dir=root_dir, mode=mode, environments=node_envs, transform=transform)
                       for node_envs in node_env_mapping if node_envs]
+
+    print(f"Number of Train Environment: {len(train_environments)}\nNumber of Test Environment: {len(test_environments)}")
     
     return train_datasets, test_dataset, node_env_mapping
 

@@ -1,26 +1,5 @@
 import torch
 import torch.nn as nn
-
-def save_checkpoint(model, optimizer, scheduler,  iteration, filepath):
-    torch.save({
-        'iteration': iteration,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'scheduler_state_dict': scheduler.state_dict(),
-    }, filepath)
-
-def load_checkpoint(model, optimizer=None, scheduler=None, filepath="",map_location='cuda:0'):
-    if filepath=="":
-        return 0
-    checkpoint = torch.load(filepath, map_location=map_location)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    if optimizer is not None and 'optimizer_state_dict' in checkpoint and checkpoint['optimizer_state_dict'] is not None:
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    if scheduler is not None and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    iteration = checkpoint['iteration']
-    print(f"successfully load model from {filepath}")
-    return iteration
     
 def process_pose_sample(model, sample, device_id):
     """
@@ -42,12 +21,15 @@ def process_pose_sample(model, sample, device_id):
     model_output = model([img1, img2, intrinsic])
     flow_pred, pose_pred = model_output      # flow_pred: [B, 2, H, W], pose_pred: [B, 6]
     
-    loss_fn = nn.MSELoss()
-    loss = loss_fn(pose_pred, motion_gt)
+    # Only Total Pose Loss
+    # loss_fn = nn.MSELoss()
+    # loss = loss_fn(pose_pred, motion_gt)
 
-    #total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
+    # Using Total Pose loss: trans Loss + Rotate Loss
+    total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
     
-    return loss
+    return total_loss, trans_loss, rot_loss
+    #return loss
 
 def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
     """

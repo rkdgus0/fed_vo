@@ -12,25 +12,31 @@ from Network.VONet import VONet
 from Network.PWC import PWCDCNet as FlowNet
 from Network.VOFlowNet import VOFlowRes as FlowPoseNet
 
-from component.NODE import NODE
-from component.SERVER import SERVER
+from Library.component.NODE import NODE
+from Library.component.SERVER import SERVER
 
 # ===== SERVER/NODE Compose function =====
 def compose_server(args, model, nodes, test_data, train_data, device):
     NUM_NODE = args.node_num
     avg_method = args.avg_method
-    iteration = args.local_iteration
+    batch_size = args.batch_size
+    worker_num = args.worker_num
     
     num_node_data = []
     for node_idx, train_dataset in enumerate(train_data):
         num_node_data.append(len(train_dataset))
 
-    return SERVER(model, nodes, NUM_NODE, test_data, iteration, avg_method, num_node_data, device=device)
+    return SERVER(model, nodes, NUM_NODE, test_data, avg_method, 
+                  num_node_data, batch_size, worker_num, device)
 
 def compose_node(args, model, optimizer, scheduler, train_data, device):
+    init_lr = args.learning_rate
+    iteration = args.local_iteration
+    batch_size = args.batch_size
+    worker_num = args.worker_num
 
-    return NODE(model, optimizer, scheduler, init_lr=args.learning_rate, datasets=train_data, iteration=args.local_iteration, 
-                batch_size=args.batch_size, worker_num=args.worker_num, device=device)
+    return NODE(model, optimizer, scheduler, init_lr, train_data,  
+                iteration, batch_size, worker_num, device)
 
 #FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
 def lambda_controller(args, current_round):
@@ -58,6 +64,46 @@ def init_model(model_name, optimizer, lr):
 
     return model, optimizer, scheduler
 
+# ===== Model Parameter Save/Load function =====
+def save_checkpoint(model, optimizer, scheduler, global_round, iteration, filepath):
+    torch.save({
+        'global_round': global_round,
+        'local_iteration': iteration,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+    }, filepath)
+
+def load_checkpoint(model, optimizer=None, scheduler=None, filepath="",map_location='cuda:0'):
+    if filepath=="":
+        return 0
+    checkpoint = torch.load(filepath, map_location=map_location)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    if optimizer is not None and 'optimizer_state_dict' in checkpoint and checkpoint['optimizer_state_dict'] is not None:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    if scheduler is not None and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    iteration = checkpoint['iteration']
+    print(f"successfully load model from {filepath}")
+    return iteration
+
+# ===== Test Trajectory Plot function =====
+def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
+    fig = plt.figure(figsize=(4,4))
+    cm = plt.cm.get_cmap('Spectral')
+
+    plt.subplot(111)
+    plt.plot(gtposes[:,0],gtposes[:,1], linestyle='dashed',c='k')
+    plt.plot(estposes[:, 0], estposes[:, 1],c='#ff7f0e')
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
+    plt.legend(['Ground Truth','TartanVO'])
+    plt.title(title)
+    if savefigname is not None:
+        plt.savefig(savefigname)
+    if vis:
+        plt.show()
+    plt.close(fig)
 
 # ===== Dataset Preprocessing =====
 # 폐기. Datasets/dataset.py에서 데이터셋 정리함

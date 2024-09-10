@@ -1,16 +1,16 @@
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-#sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
-
+#sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
 
 import torch
-import torch.optim as optim
 import torch.nn as nn
-import numpy as np
+import torch.optim as optim
+
+from copy import deepcopy
 from torch.utils.data import DataLoader
 from Library.train_util import process_pose_sample
-from copy import deepcopy
+
 
 class NODE():
     def __init__(self, model, optimizer, scheduler, init_lr, datasets, iteration, batch_size, worker_num, device='cuda:0'):
@@ -25,7 +25,7 @@ class NODE():
         self.scheduler = deepcopy(scheduler)
         
 
-    def train(self, node_idx, iteration, model_parameters):
+    def train(self, node_idx, model_parameters):
         self.model.load_state_dict(model_parameters) #global model
 
         # setting node's train data
@@ -33,16 +33,16 @@ class NODE():
         trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.worker_num)
         #trainDataiter = iter(trainDataloader)
 
-        for curr_iter in range(iteration):
+        for curr_iter in range(self.iteration):
             #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
-            loss = None
+            total_loss = None
             for sample in trainDataloader:
-                self.model.train()
                 self.optimizer.zero_grad()
+                self.model.train()
 
                 #if mode == 'whole':
-                loss = process_pose_sample(self.model, sample, self.device)
-                loss.backward()
+                total_loss, trans_loss, rot_loss = process_pose_sample(self.model, sample, self.device)
+                total_loss.backward()
                     
                     # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
 
@@ -50,7 +50,7 @@ class NODE():
             
                 #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
             self.scheduler.step()
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {loss}")
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss}")
             
 
     def set_lr(self, lr):
@@ -58,8 +58,8 @@ class NODE():
             param_group['lr'] = lr
 
 
-from Library.Datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
-from Library.Datasets.dataset import initial_dataset
+from Library.datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
+from Library.datasets.dataset import initial_dataset
 from Network.VONet import VONet
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -108,7 +108,7 @@ if __name__ == '__main__':
         if len(train_dataset) > 0:
             print(f"Node {node_idx+1} Train dataset size: {len(train_dataset)}")
             print(f"Node {node_idx+1} Train dataset environment name: {node_envs[node_idx]}")
-            Node.train(node_idx, train_type, iteration, model_parameter)
+            Node.train(node_idx, model_parameter)
         else:
             pass
 

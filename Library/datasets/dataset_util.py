@@ -215,25 +215,6 @@ def visflow(flownp, maxF=500.0, n=8, mask=None, hueMax=179, angShift=0.0):
 
     return bgr
 
-
-
-def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
-    fig = plt.figure(figsize=(4,4))
-    cm = plt.cm.get_cmap('Spectral')
-
-    plt.subplot(111)
-    plt.plot(gtposes[:,0],gtposes[:,1], linestyle='dashed',c='k')
-    plt.plot(estposes[:, 0], estposes[:, 1],c='#ff7f0e')
-    plt.xlabel('x (m)')
-    plt.ylabel('y (m)')
-    plt.legend(['Ground Truth','TartanVO'])
-    plt.title(title)
-    if savefigname is not None:
-        plt.savefig(savefigname)
-    if vis:
-        plt.show()
-    plt.close(fig)
-
 def make_intrinsics_layer(w, h, fx, fy, ox, oy):
     ww, hh = np.meshgrid(range(w), range(h))
     ww = (ww.astype(np.float32) - ox + 0.5 )/fx

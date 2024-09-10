@@ -4,21 +4,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
+from time import time, strftime, gmtime
 import torch
-import numpy as np
-from time import time
-from torch.utils.tensorboard import SummaryWriter
-from Library.Datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow
-from Library.Datasets.dataset import initial_dataset
-#from Datasets.transformation import ses2poses_quat
-#from evaluator.tartanair_evaluator import TartanAirEvaluator
-from TartanVO import TartanVO
-#from utils.train_utils import load_checkpoint, save_checkpoint, train_pose_batch
+import argparse
+#from torch.utils.tensorboard import SummaryWriter
 
 from Network.VONet import VONet
-from Library.fl_util import compose_node, compose_server, init_model
-from Library.train_util import save_checkpoint
-import argparse
+
+from Library.fl_util import compose_node, compose_server, init_model, save_checkpoint, plot_traj
+
+from Library.datasets.dataset import initial_dataset
+from Library.datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow
+
 
 #TODO Parser 파라미터 변경해야할 수 있음.
 def get_args():
@@ -27,7 +24,7 @@ def get_args():
     # ===== FL Setting ======
     # worker_num: dataset을 GPU로 넘기는 과정에서의 preprocessing을 하는 subprocess 수(많을수록 빠르나, 자원 차지가 많아짐)
     parser.add_argument('--worker_num', '-worker', type=int, default=4,
-                        help='data loader worker number (default: 16)')
+                        help='data loader worker number (default: 4)')
     # node_num: 연합학습(FL)에서 학습에 참여하는 Node의 수
     parser.add_argument('--node_num', '-node', type=int, default=16,
                         help='number of nodes, different from worker_num (default: 16)')
@@ -73,6 +70,9 @@ def get_args():
     # exp_name: Model의 weight와 학습 이후 Summary log 저장 path 설정 
     parser.add_argument('--exp_name', '-exp', type=str, default='Test',
                         help="Saving Path for weight&Summary (default: Test)")
+    # eval_round: Evaluation을 수행할 Round 주기
+    parser.add_argument('--eval_round', '-eval_round', type=int, default=1,
+                        help='Evaluation round (default: 1)')
     
     args = parser.parse_args()
     return args
@@ -85,12 +85,15 @@ if __name__ == '__main__':
 
     NUM_NODE = args.node_num
     GLOBAL_ROUND = args.global_round
+    LOCAL_ROUND = args.local_iteration
     DATASET_NAME = args.data_name
     EXP_NAME = args.exp_name
     TEST_ENVS=['ocean', 'amusement', 'zipfile']
 
     print('===== init the model & optimizer & scheduler ..')
     t1 = time()
+    torch.cuda.empty_cache()
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model, optimizer, scheduler = init_model(args.model, args.optimizer, args.learning_rate)
     t2 = time()
     print(f'===== Success to compose model! (Time(sec): {round(t2-t1,2)})\n')
@@ -106,13 +109,12 @@ if __name__ == '__main__':
 
     print('===== init Server and Nodes..')
     t1 = time()
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     Node = compose_node(args, model, optimizer, scheduler, train_data, device)
     Server = compose_server(args, model, Node, test_data, train_data, device)
     t2 = time()
     print(f'===== Success to compose Server & Nodes! (Time(sec): {round(t2-t1,2)})\n')
     
-    summaryWriter = SummaryWriter(f'runs/{EXP_NAME}')
+    #summaryWriter = SummaryWriter(f'runs/{EXP_NAME}')
     #start_epoch,iteration = load_checkpoint(model, optimizer, scheduler, args.model_name)
 
     print(f'Federated Collaborative VO start!')
@@ -122,25 +124,30 @@ if __name__ == '__main__':
     print(f'===== [CVO] Dataset: {args.data_name} (Batch Size: {args.batch_size})')
     print(f'===== [CVO] Image Crop(Width, Height): {args.image_width}, {args.image_height}')
     print(f'===== [CVO] Dataset Path: {args.data_path} (Easy or Hard: {args.easy_hard})')
-    print(f'===== [CVO] Global Round: {args.global_round}, Local Iteration: {args.local_iteration} Start!\n')
+    print(f'===== [CVO] Global Round: {GLOBAL_ROUND}, Local Iteration: {LOCAL_ROUND} Start!\n')
     
-
     t00 = time()
-    for round in range(1, GLOBAL_ROUND+1):
-        #TODO 밑의 코드는 train 코드니까 따로 함수로 빼두기. 아마 Library/util에 만들기
-        print(f'===== Global Round {round} start!')
+    for R in range(1, GLOBAL_ROUND+1):
+        print(f'===== Global Round {R} Train start!')
         t1 = time()
         Server.train()
         t2 = time()
-        print(f'[Global Round {round}] Time(sec): {round(t2-t1,2)}\n')
+        round_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
+        print(f'[Global Round {R}] Train Time(sec): {round_time}\n')
 
-    t01 = time()
-    print(f'===== Federated Collaborative VO Finished! (Time(sec): {round(t01-t00,2)})\n')
+        if R % args.eval_round == 0 or R == GLOBAL_ROUND+1:
+            print(f'===== Global Round {R} Evaluate start!')
+            t1 = time()
+            result = Server.test()
+            print("==> ATE: %.4f,\t KITTI-R/t: %.4f, %.4f" %(result['ate_score'], result['kitti_score'][0], result['kitti_score'][1]))
+            plot_traj(result['gt_aligned'], result['est_aligned'], vis=False, savefigname='results/['+EXP_NAME+'] Round_'+R+'.png', title='ATE %.4f' %(result['ate_score']))
+            np.savetxt('results/'+EXP_NAME+'.txt',result['est_aligned'])
+            t2 = time()
+            eval_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
+            print(f'[Global Round {R}] Evaluation Time(sec): {eval_time}\n')
+
     model_save_path = f'models/exp_{EXP_NAME}.pth'
-    save_checkpoint(model, optimizer, scheduler, round, iteration, model_save_path)
-
-
-        
-
-
-
+    save_checkpoint(model, optimizer, scheduler, GLOBAL_ROUND, LOCAL_ROUND, model_save_path)
+    t01 = time()
+    total_time = strftime("%Hh %Mm %Ss", gmtime(t01-t00))
+    print(f'===== Federated Collaborative VO Finished! (Time(sec): {total_time})\n')
