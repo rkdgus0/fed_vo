@@ -6,23 +6,25 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR
 
 from copy import deepcopy
 from torch.utils.data import DataLoader
-from Library.train_util import process_pose_sample
+from Library.train_util import process_pose_sample, process_whole_sample, loss_function
+
 
 
 class NODE():
-    def __init__(self, model, optimizer, scheduler, init_lr, datasets, iteration, batch_size, worker_num, device='cuda:0'):
+    def __init__(self, model, optimizer, scheduler, datasets, iteration, batch_size, worker_num, device='cuda:0'):
         super(NODE, self).__init__()
         self.datasets = datasets
         self.iteration = iteration
         self.batch_size = batch_size
         self.worker_num = worker_num
         self.device = device
-        self.model = deepcopy(model).to(device)
-        self.optimizer = deepcopy(optimizer)
-        self.scheduler = deepcopy(scheduler)
+        self.model = model.to(device)
+        self.optimizer = optimizer
+        self.scheduler = scheduler
         
 
     def train(self, node_idx, model_parameters):
@@ -31,27 +33,31 @@ class NODE():
         # setting node's train data
         train_data = self.datasets[node_idx]
         trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.worker_num)
-        #trainDataiter = iter(trainDataloader)
+        self.model.train()
 
         for curr_iter in range(self.iteration):
             #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
-            total_loss = None
             for sample in trainDataloader:
                 self.optimizer.zero_grad()
-                self.model.train()
 
-                #if mode == 'whole':
-                total_loss, trans_loss, rot_loss = process_pose_sample(self.model, sample, self.device)
+                total_loss, flow_loss, pose_loss, trans_loss, rot_loss = loss_function(self.model, sample, 1, 1e-6, self.device)
                 total_loss.backward()
                     
                     # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
+                #before_update = {name: param.clone() for name, param in self.model.named_parameters()}
 
+                # optimizer step 호출
                 self.optimizer.step()
+
+                # step 이후에 파라미터 값과 비교
+                '''print("\nParameter updates:")
+                for name, param in self.model.named_parameters():
+                    update = param - before_update[name]
+                    print(f"Layer {name} update norm: {update.norm()}")'''
             
                 #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
             self.scheduler.step()
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss}")
-            
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss.item()}")
 
     def set_lr(self, lr):
         for param_group in self.optimizer.param_groups:
@@ -61,54 +67,53 @@ class NODE():
 from Library.datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
 from Library.datasets.dataset import initial_dataset
 from Network.VONet import VONet
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ExponentialLR
+
 
 
 if __name__ == '__main__':
     data_name = 'tartanair'
-    root_dir = '/scratch/jeongeon/tartanAir'
-    mode = 'easy'
-    node_num = 17
-    transform = Compose([CropCenter((640, 480)), DownscaleFlow(), ToTensor()])
-    test_environments = ['ocean', 'zipfile']
-    train_type = 'whole'
-    iteration = 1
+    root_dir = '/scratch/jeongeon/tartanAir/train_data'
+    easy_hard = 'easy'
+    node_num = 3
+    transform = Compose([CropCenter((640, 448)), DownscaleFlow(), ToTensor()])
+    test_environments = ['ocean', 'office2', 'soulcity', 'carwelding', 'abandonedfactory_night', 'seasonsforest', 'neighborhood', 'japanesealley', 'oldtown', 'carwelding', 'seasonsforest_winter', 'westerndesert', 'office', 'hospital', 'gascola', 'amusement', 'testDatset']
+    iteration = 2
     batch_size = 64
-    worker = 4
-
-    def lambda_controller(current_round):
-        if current_round < 0.5 * 100:
-            return 1.0
-        elif current_round < 0.875 * 100:
-            return 0.2
-        else:
-            return 0.04
+    worker = 32
+    sequence = 'P001'
     
     torch.cuda.empty_cache()
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = torch.nn.DataParallel(VONet())
-    optimizer = torch.optim.Adam(model.module.flowPoseNet.parameters(), lr=0.01)
-    scheduler = LambdaLR(optimizer, lr_lambda=lambda_controller)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    scheduler = ExponentialLR(optimizer, gamma=0.95)
 
     print("Init Dataset...")
-    train_data, test_data, node_envs = initial_dataset(data_name, root_dir, mode, node_num, transform, test_environments)
+    train_data, test_data, node_envs = initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transform, test_environments)
     print("Success to init dataset!\n")
 
     print("Init model parameter...")
     #Node = compose_node(args, model, optimizer, scheduler, train_data)
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
     model_parameter = model.state_dict()
     print("Success to init model parameter!\n")
 
     print("Init Node component...")
-    Node =  NODE(model, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=batch_size, worker_num=worker, device=device)
+    Node =  NODE(model, optimizer, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=batch_size, worker_num=worker, device=device)
 
     print(f'Node num: {len(train_data)}')
     for node_idx, train_dataset in enumerate(train_data):
+        node_state_dicts = []
+        participating_node = []
         if len(train_dataset) > 0:
             print(f"Node {node_idx+1} Train dataset size: {len(train_dataset)}")
             print(f"Node {node_idx+1} Train dataset environment name: {node_envs[node_idx]}")
             Node.train(node_idx, model_parameter)
+            participating_node.append(node_idx)
+            node_state_dict = Node.model.state_dict()
+            node_state_dicts.append(node_state_dict)
+            
         else:
             pass
 

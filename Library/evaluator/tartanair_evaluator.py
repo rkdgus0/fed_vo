@@ -17,9 +17,8 @@ class TartanAirEvaluator:
         self.kitti_eval = KittiEvaluator()
         
     def evaluate_one_trajectory(self, gt_traj, est_traj, scale=False, kittitype=True):
-        
-        print(f"GT Length Shape: {gt_traj.shape[0]}\nEST Length Shape: {est_traj.shape[0]}")
-        print(f"GT format Shape: {gt_traj.shape[1]}\nEST format Shape: {est_traj.shape[1]}")
+        '''gt_traj = np.loadtxt(gt_traj)
+        est_traj = np.loadtxt(est_traj)'''
         if gt_traj.shape[0] != est_traj.shape[0]:
             raise Exception("POSEFILE_LENGTH_ILLEGAL")
         if gt_traj.shape[1] != 7 or est_traj.shape[1] != 7:
@@ -30,8 +29,11 @@ class TartanAirEvaluator:
         gt_SEs, est_SEs = quats2SEs(gt_traj_trans, est_traj_trans)
 
         ate_score, gt_ate_aligned, est_ate_aligned = self.ate_eval.evaluate(gt_traj, est_traj, scale)
+        #print(f"ate score: {ate_score}, gt ate_aligned: {gt_ate_aligned}, est ate aligned: {est_ate_aligned}")
         rpe_score = self.rpe_eval.evaluate(gt_SEs, est_SEs)
-        kitti_score = self.kitti_eval.evaluate(gt_SEs, est_SEs, kittitype=kittitype)
+        print(f"rpe score: {rpe_score}")
+        kitti_score = self.kitti_eval.evaluate(gt_SEs, est_SEs, kittitype)
+        print(f"kitti score: {kitti_score}")
 
         return {'ate_score': ate_score, 
                 'rpe_score': rpe_score, 
@@ -39,9 +41,33 @@ class TartanAirEvaluator:
                 'gt_aligned': gt_ate_aligned, 
                 'est_aligned': est_ate_aligned}
 
+import matplotlib.pyplot as plt
+import os
+from time import time, strftime, gmtime
+
+
+    
+def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
+    fig = plt.figure(figsize=(4,4))
+    cm = plt.cm.get_cmap('Spectral')
+
+    plt.subplot(111)
+    plt.plot(gtposes[:,0],gtposes[:,1], linestyle='dashed',c='k')
+    plt.plot(estposes[:, 0], estposes[:, 1],c='#ff7f0e')
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
+    plt.legend(['Ground Truth','TartanVO'])
+    plt.title(title)
+    if savefigname is not None:
+        plt.savefig(savefigname)
+    if vis:
+        plt.show()
+    plt.close(fig)
 if __name__ == "__main__":
     
     # scale = True for monocular track, scale = False for stereo track
     aicrowd_evaluator = TartanAirEvaluator()
     result = aicrowd_evaluator.evaluate_one_trajectory('pose_gt.txt', 'pose_est.txt', scale=True)
-    print(result)
+    print("==> ATE: %.4f,\t KITTI-R/t: %.4f, %.4f" %(result['ate_score'], result['kitti_score'][0], result['kitti_score'][1]))
+    plot_traj(result['gt_aligned'], result['est_aligned'], vis=False, savefigname=f'../../results/debug_test.png', title='ATE %.4f' %(result['ate_score']))
+        

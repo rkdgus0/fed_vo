@@ -29,12 +29,13 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+# tartan train Net
 
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from Network.PWC import PWCDCNet as FlowNet
-from Network.VOFlowNet import VOFlowRes as FlowPoseNet
+from .PWC import PWCDCNet as FlowNet
+from .VOFlowNet import VOFlowRes as FlowPoseNet
 
 class VONet(nn.Module):
     def __init__(self):
@@ -46,7 +47,10 @@ class VONet(nn.Module):
     def forward(self, x):
         # import ipdb;ipdb.set_trace()
         flow = self.flowNet(x[0:2])
-        flow_input = torch.cat( ( flow, x[2] ), dim=1 )        
+        if self.training:
+            flow_input = torch.cat( ( flow[0], x[2] ), dim=1 )        
+        else:
+            flow_input = torch.cat( ( flow, x[2] ), dim=1 )        
         pose = self.flowPoseNet( flow_input )
 
         return flow, pose

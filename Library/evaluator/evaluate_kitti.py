@@ -114,8 +114,8 @@ def evaluate(gt, data,kittitype=True):
 def  main():
     # usage: python main.py path_to_ground_truth path_to_predict_pose
     # load and preprocess data
-    ground_truth_data  = np.loadtxt(sys.argv[1])
-    predict_pose__data = np.loadtxt(sys.argv[2])
+    ground_truth_data  = np.loadtxt('pose_gt.txt')
+    predict_pose__data = np.loadtxt('pose_est.txt')
     errors = calculate_sequence_error(ground_truth_data,predict_pose__data)
     rot,tra = calculate_ave_errors(errors)
     print(rot,'\n',tra)

@@ -1,6 +1,62 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
     
+def flow_loss_fn(flow_est, flow_gt):
+    
+    #flow_loss_fn = F.l1_loss()
+    flow_loss = F.l1_loss(flow_est, flow_gt)
+
+    return flow_loss
+
+def pose_loss_fn(motion_est, motion_gt, epsilon=1e-6):
+    # input motion -> transformation & rotation
+    trans_est = motion_est[:, :3]
+    rot_est = motion_est[:, 3:]
+    
+    trans_gt = motion_gt[:, :3]
+    rot_gt = motion_gt[:, 3:]
+
+    # transformation loss
+    trans_pred_norm = trans_est / torch.max(trans_est.norm(dim=1, keepdim=True), torch.tensor(epsilon).to(trans_est.device))
+    trans_gt_norm = trans_gt / torch.max(trans_gt.norm(dim=1, keepdim=True), torch.tensor(epsilon).to(trans_gt.device))
+    #trans_loss_fn = F.l1_loss()
+    trans_loss = F.l1_loss(trans_pred_norm, trans_gt_norm)
+
+    # rotation loss
+    #rot_loss_fn = F.l1_loss()
+    rot_loss = F.l1_loss(rot_est, rot_gt)
+
+    # pose loss
+    pose_loss = trans_loss + rot_loss
+
+    return pose_loss, trans_loss, rot_loss
+
+def loss_function(model, sample, lambda_flow, epsilon, device):
+    sample = {k: v.to(device) for k, v in sample.items()} 
+    # inputs-------------------------------------------------------------------
+    img1 = sample['img1']
+    img2 = sample['img2']
+    intrinsic_layer = sample['intrinsic']
+        
+    # forward------------------------------------------------------------------
+    flow_est, motion_est = model([img1,img2,intrinsic_layer])
+
+    # loss calculation---------------------------------------------------------
+    flow_gt = sample['flow']
+    motion_gt = sample['motion']
+
+    # pose loss
+    pose_loss, trans_loss, rot_loss = pose_loss_fn(motion_est, motion_gt, epsilon)
+
+    # flow loss
+    flow_loss = flow_loss_fn(flow_est, flow_gt)
+
+    # total loss
+    total_loss = flow_loss*lambda_flow + pose_loss
+    
+    return total_loss, flow_loss, pose_loss, trans_loss, rot_loss
+
 def process_pose_sample(model, sample, device_id):
     """
     모델과 샘플을 받아서 예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산하는 함수
@@ -27,6 +83,7 @@ def process_pose_sample(model, sample, device_id):
 
     # Using Total Pose loss: trans Loss + Rotate Loss
     total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
+
     
     return total_loss, trans_loss, rot_loss
     #return loss
@@ -58,7 +115,7 @@ def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
     rot_loss_fn = nn.MSELoss()
     rot_loss = rot_loss_fn(rot_pred, rot_gt)
     
-    total_loss = trans_weight * trans_loss + rot_weight * rot_loss
+    total_loss = trans_weight*trans_loss + rot_weight*rot_loss
     
     return total_loss, trans_loss, rot_loss
 
@@ -76,8 +133,9 @@ def process_whole_sample(model,sample,lambda_flow,device_id):
     # loss calculation---------------------------------------------------------
     flow_gt = sample['flow']
     motions_gt = sample['motion']
-    flow_loss = model.module.flowNet.get_loss(flow,flow_gt,small_scale=True)
-    pose_loss,trans_loss,rot_loss = model.module.flowPoseNet.linear_norm_trans_loss(relative_motion, motions_gt)
+    get_loss = nn.MSELoss()
+    flow_loss = get_loss(flow,flow_gt)
+    pose_loss,trans_loss,rot_loss = calculate_pose_loss(relative_motion, motions_gt)
     total_loss = flow_loss*lambda_flow + pose_loss
     
     return total_loss,flow_loss,pose_loss,trans_loss,rot_loss

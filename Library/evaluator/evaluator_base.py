@@ -88,5 +88,5 @@ class KittiEvaluator(object):
     # return rot_error, tra_error
     def evaluate(self, gt_SEs, est_SEs, kittitype):
         # trajectory_scale(est_SEs, 0.831984631412)
-        error = kittievaluate(gt_SEs, est_SEs, kittitype=kittitype)
+        error = kittievaluate(gt_SEs, est_SEs, kittitype)
         return error
