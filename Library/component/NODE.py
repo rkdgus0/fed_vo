@@ -8,10 +8,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 
+from time import time, strftime, gmtime
 from copy import deepcopy
 from torch.utils.data import DataLoader
 from Library.train_util import process_pose_sample, process_whole_sample, loss_function
-
 
 
 class NODE():
@@ -37,10 +37,12 @@ class NODE():
 
         for curr_iter in range(self.iteration):
             #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
+            t1 = time()
             for sample in trainDataloader:
                 self.optimizer.zero_grad()
+                #self.model.zero_grad()
 
-                total_loss, flow_loss, pose_loss, trans_loss, rot_loss = loss_function(self.model, sample, 1, 1e-6, self.device)
+                total_loss, flow_loss, pose_loss, trans_loss, rot_loss = loss_function(self.model, sample, 10, 1e-6, self.device)
                 total_loss.backward()
                     
                     # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
@@ -57,7 +59,9 @@ class NODE():
             
                 #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
             self.scheduler.step()
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss.item()}")
+            t2 = time()
+            iter_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss.item()}, Time: {iter_time}")
 
     def set_lr(self, lr):
         for param_group in self.optimizer.param_groups:

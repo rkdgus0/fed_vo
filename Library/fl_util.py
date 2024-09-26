@@ -7,11 +7,6 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-if ( not ( "DISPLAY" in os.environ ) ):
-    plt.switch_backend('agg')
-    print("Environment variable DISPLAY is not present in the system.")
-    print("Switch the backend of matplotlib to agg.")
-
 from torch.optim.lr_scheduler import LambdaLR, ExponentialLR
 
 from Network.VONet import VONet
@@ -27,12 +22,13 @@ def compose_server(args, model, nodes, test_data, train_data, device):
     avg_method = args.avg_method
     batch_size = args.batch_size
     worker_num = args.worker_num
+    test_data_path = f"{args.data_path}/ocean/{args.easy_hard}/P001/pose_left.txt"
     
     num_node_data = []
     for node_idx, train_dataset in enumerate(train_data):
         num_node_data.append(len(train_dataset))
 
-    return SERVER(model, nodes, NUM_NODE, test_data, avg_method, 
+    return SERVER(model, nodes, NUM_NODE, test_data, test_data_path, avg_method, 
                   num_node_data, batch_size, worker_num, device)
 
 def compose_node(args, model, optimizer, scheduler, train_data, device):
@@ -44,10 +40,10 @@ def compose_node(args, model, optimizer, scheduler, train_data, device):
                 iteration, batch_size, worker_num, device)
 
 #FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
-def lambda_controller(args, current_round):
-        if current_round < 0.5 * args.globla_round:
+def lambda_controller(global_round, current_round):
+        if current_round < 0.5 * globla_round:
             return 1.0
-        elif current_round < 0.875 * args.globla_round:
+        elif current_round < 0.875 * globla_round:
             return 0.2
         else:
             return 0.04
@@ -57,6 +53,7 @@ def init_model(model_name, optimizer, lr):
         model = torch.nn.DataParallel(VONet())
     elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
         model = torch.nn.DataParallel(FlowNet())
+        mode.pwc_dc_net('../../data/pwc_net_chairs.pth.tar')
     elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
         model = torch.nn.DataParallel(FlowPoseNet())
     
@@ -65,7 +62,7 @@ def init_model(model_name, optimizer, lr):
     elif optimizer.lower() == 'sgd':
         optimizer = torch.optim.sgd(model.parameters(), lr=lr)
     
-    scheduler = ExponentialLR(optimizer, gamma=0.95)
+    scheduler = ExponentialLR(optimizer, gamma=0.998)
 
     return model, optimizer, scheduler
 
@@ -109,3 +106,4 @@ def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
     if vis:
         plt.show()
     plt.close(fig)
+

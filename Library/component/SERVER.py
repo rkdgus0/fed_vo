@@ -11,12 +11,13 @@ from Library.evaluator.tartanair_evaluator import TartanAirEvaluator
 from Library.datasets.transformation import ses2poses_quat
 
 class SERVER():
-    def __init__(self, model, nodes, NUM_NODE, test_data, avg_method, num_node_data, batch_size, worker_num, device='cuda:0'):
+    def __init__(self, model, nodes, NUM_NODE, test_data, test_data_path, avg_method, num_node_data, batch_size, worker_num, device='cuda:0'):
         super(SERVER, self).__init__()
         self.model = model.to(device)
         self.NUM_NODE = NUM_NODE
         self.nodes = nodes
         self.test_data = test_data
+        self.test_data_path = test_data_path
         self.avg_method = avg_method
         self.num_node_data = deepcopy(num_node_data)
         self.batch_size = batch_size
@@ -42,39 +43,12 @@ class SERVER():
                 self.nodes.train(node_idx, model_parameter)
                 participating_node.append(node_idx)
                 node_state_dict = self.nodes.model.state_dict()
-                '''dif_num = 0
-                eq_num = 0
-                for key in node_state_dict.keys():
-                    model_tensor = node_state_dict[key].cpu()
-                    avg_tensor = model_parameter[key].cpu()
-                    if not torch.allclose(model_tensor, avg_tensor, atol=1e-5):
-                        dif_num += 1
-                    else:
-                        eq_num += 1
-                print(f"[Node {node_idx+1}] Difference found in parameter: {dif_num}")
-                print(f"[Node {node_idx+1}] No difference in parameter: {eq_num}")'''
                 node_state_dicts.append(node_state_dict)
 
         avg_ratio = self.calc_avg_ratio(node_state_dicts, participating_node)
         print(f"avg ratio: {avg_ratio}")
         #avg_ratio_tensor = torch.tensor(avg_ratio, dtype=torch.float32).view(-1, 1, 1, 1, 1)
         avg_model = self.average_model(node_state_dicts, avg_ratio)
-
-        '''dif_num = 0
-        eq_num = 0
-        for key in model_parameter.keys():
-            model_tensor = model_parameter[key].cpu()
-            avg_tensor = avg_model[key].cpu()
-            if not torch.equal(model_tensor, avg_tensor):
-                dif_num += 1
-            else:
-                eq_num += 1
-        print("\nParameter updates:")
-        for name, param in self.model.named_parameters():
-            update = param - before_update[name]
-            print(f"Layer {name} update norm: {update.norm()}")
-        print(f"[SERVER] Difference found in parameter: {dif_num}")
-        print(f"[SERVER] No difference in parameter: {eq_num}")'''
 
         self.model.load_state_dict(avg_model)
         
@@ -97,17 +71,20 @@ class SERVER():
                 img1 = sample['img1'].to(self.device)
                 img2 = sample['img2'].to(self.device)
                 intrinsic = sample['intrinsic'].to(self.device)
-                pose_gt = sample['motion'].to(self.device)
+                motion_gt = sample['motion'].to(self.device)
 
                 _, pose_pred = self.model([img1, img2, intrinsic])
                 pose_pred = pose_pred.cpu().numpy() * self.pose_std
+                # transition의 size를 gt와 동일하게 설정
+                scale = np.linalg.norm(motion_gt[:,:3].cpu().numpy(), axis=1)
+                trans_pred = pose_pred[:,:3]
+                trans_pred = trans_pred/np.linalg.norm(trans_pred,axis=1).reshape(-1,1)*scale.reshape(-1,1)
+                pose_pred[:,:3] = trans_pred
                 
                 pose_preds.append(pose_pred)
-                pose_gts.append(pose_gt.cpu().numpy())
         
         pose_preds = ses2poses_quat(np.concatenate(pose_preds, axis=0))
-        pose_gts = ses2poses_quat(np.concatenate(pose_gts, axis=0))
-
+        pose_gts = np.loadtxt(self.test_data_path).astype(np.float32)
         result = self.evaluator.evaluate_one_trajectory(pose_gts, pose_preds, scale=True, kittitype=False)
         return result
 

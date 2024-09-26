@@ -61,9 +61,9 @@ class TartanAirDataset(Dataset):
                 self.flow_files.append(flow_files[-1]) #더미 값 추가
 
                 # pose list to motion and matrix
-                poselist = np.loadtxt(pose_file).astype(np.float32)
-                assert(poselist.shape[1]==7)
-                poses = pos_quats2SEs(poselist)
+                self.poselist = np.loadtxt(pose_file).astype(np.float32)
+                assert(self.poselist.shape[1]==7)
+                poses = pos_quats2SEs(self.poselist)
                 matrix = pose2motion(poses)
                 motions = SEs2ses(matrix).astype(np.float32)
                 self.motions.extend(motions)
@@ -107,7 +107,7 @@ class TartanAirDataset(Dataset):
         
         
 
-def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transform, test_environments=['ocean']):
+def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transform, test_environments=['ocean'], split_mode='basic'):
     """
     Returns:
         tuple: (train_dataset, test_dataset)으로 분할된 데이터셋
@@ -121,7 +121,12 @@ def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transfor
     # train dataset
     # node에 순차적으로 배정
     all_environments = os.listdir(root_dir)
-    train_environments = [env for env in all_environments if env not in set(test_environments)]
+    if split_mode == 'basic':
+        train_environments = [env for env in all_environments if env not in set(test_environments)]
+    elif split_mode == 'all':
+        train_environments = [env for env in all_environments]
+    elif split_mode == 'test':
+        train_environments = test_environments
     train_datasets = [[] for _ in range(node_num)]
     node_env_mapping = [[] for _ in range(node_num)]
     

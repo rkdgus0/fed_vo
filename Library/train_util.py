@@ -32,7 +32,7 @@ def pose_loss_fn(motion_est, motion_gt, epsilon=1e-6):
 
     return pose_loss, trans_loss, rot_loss
 
-def loss_function(model, sample, lambda_flow, epsilon, device):
+def loss_function(model, sample, lambda_flow, epsilon, device='cuda:0'):
     sample = {k: v.to(device) for k, v in sample.items()} 
     # inputs-------------------------------------------------------------------
     img1 = sample['img1']

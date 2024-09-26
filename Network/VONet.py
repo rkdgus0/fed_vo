@@ -33,14 +33,15 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from Network.PWC import PWCDCNet as FlowNet
+from Network.PWC import PWCDCNet as FlowNet, pwc_dc_net
 from Network.VOFlowNet import VOFlowRes as FlowPoseNet
 
 class VONet(nn.Module):
     def __init__(self):
         super(VONet, self).__init__()
 
-        self.flowNet     = FlowNet()
+        #self.flowNet     = FlowNet()
+        self.flowNet = pwc_dc_net('data/pwc_net_chairs.pth.tar')
         self.flowPoseNet = FlowPoseNet()
 
     def forward(self, x):

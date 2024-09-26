@@ -6,6 +6,7 @@ sys.path.append(parent_dir)
 
 from time import time, strftime, gmtime
 import torch
+import random
 import argparse
 import numpy as np
 #from torch.utils.tensorboard import SummaryWriter
@@ -17,17 +18,33 @@ from Library.fl_util import compose_node, compose_server, init_model, save_check
 from Library.datasets.dataset import initial_dataset
 from Library.datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow
 
+# ===== Fix Seed function =====
+def make_deterministic(seed=42):
+    """Make results deterministic. If seed == -1, do not make deterministic.
+    Running the script in a deterministic way might slow it down.
+    """
+    if seed == -1:
+        return
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 #TODO Parser 파라미터 변경해야할 수 있음.
 def get_args():
     parser = argparse.ArgumentParser(description='C_VO with FL')
 
     # ===== FL Setting ======
+    # Seed: Random 함수의 Seed를 고정
+    parser.add_argument('--seed', '-seed', type=int, default=42,
+                        help='fixing the random seed (default: 42)')
     # worker_num: dataset을 GPU로 넘기는 과정에서의 preprocessing을 하는 subprocess 수(많을수록 빠르나, 자원 차지가 많아짐)
     parser.add_argument('--worker_num', '-worker', type=int, default=32,
                         help='data loader worker number (default: 32)')
     # node_num: 연합학습(FL)에서 학습에 참여하는 Node의 수
-    parser.add_argument('--node_num', '-node', type=int, default=17,
+    parser.add_argument('--node_num', '-node', type=int, default=1,
                         help='number of nodes, different from worker_num (default: 17)')
     parser.add_argument('--avg_method', '-avg', type=str, default='fedavg',
                         help='average method (Select: fedavg, equal), (default: fedavg)')
@@ -39,10 +56,10 @@ def get_args():
     # batch_size: model 학습과 evaluation에서 사용할 data 개수 조정
     parser.add_argument('--optimizer', '-opt', type=str, default='adam',
                         help="name of model's optimizer (Select: adam, sgd) (default: 'adam')")
-    parser.add_argument('--batch_size', '-batch', type=int, default=64,
+    parser.add_argument('--batch_size', '-batch', type=int, default=32,
                         help='batch size (default: 64)')
     # global_round: 전체 학습 round
-    parser.add_argument('--global_round', '-round', type=int, default=100,
+    parser.add_argument('--global_round', '-round', type=int, default=20,
                         help='total number of Global round (default: 1)')
     # local_iteration: 각 node의 iteration 횟수
     parser.add_argument('--local_iteration', '-iter', type=int, default=2,
@@ -57,8 +74,8 @@ def get_args():
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
     parser.add_argument('--data_path', '-path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
                         help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
-    parser.add_argument('--easy_hard', '-e_h', type=str, default='easy',
-                        help="Dataset type(select: easy, hard, both), (default: easy)")
+    parser.add_argument('--easy_hard', '-e_h', type=str, default='Easy',
+                        help="Dataset type(select: Easy, Hard, *), (default: Easy)")
     parser.add_argument('--sequence', '-seq', type=str, default='*',
                         help="Dataset type(select: * or P0XX), (default: *)")
     # image_width: 이미지 크기 조정에 사용할 parameter
@@ -76,7 +93,9 @@ def get_args():
     # eval_round: Evaluation을 수행할 Round 주기
     parser.add_argument('--eval_round', '-eval', type=int, default=1,
                         help='Evaluation round (default: 1)')
-    
+    #DEBUG용
+    parser.add_argument('--data_mode', '-data_mode', type=str, default='basic',
+                        help="Dataset name(select: basic, all, test), (default: basic)")
     args = parser.parse_args()
     return args
 
@@ -85,12 +104,13 @@ def get_args():
 if __name__ == '__main__':
 
     args = get_args()
+    make_deterministic(args.seed)
 
     NUM_NODE = args.node_num
     GLOBAL_ROUND = args.global_round
     LOCAL_ROUND = args.local_iteration
     DATASET_NAME = args.data_name
-    EXP_NAME = args.exp_name
+    EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
     TEST_ENVS=['ocean']
 
     print('===== init the model & optimizer & scheduler ..')
@@ -107,7 +127,7 @@ if __name__ == '__main__':
     transform = Compose([CropCenter((args.image_height, args.image_width)), DownscaleFlow(), ToTensor()])
     # Can change test environments
     train_data, test_data, node_env_mapping = initial_dataset(data_name=DATASET_NAME, root_dir=args.data_path, easy_hard=args.easy_hard, 
-                                                              sequence=args.sequence, node_num=NUM_NODE, transform=transform, test_environments=TEST_ENVS)
+                                                              sequence=args.sequence, node_num=NUM_NODE, transform=transform, test_environments=TEST_ENVS, split_mode=args.data_mode)
     t2 = time()
     print(f'===== success to split Server & Node dataset(test, train)! (Time(sec): {round(t2-t1,2)})\n')
 
@@ -123,7 +143,7 @@ if __name__ == '__main__':
 
     print(f'Federated Collaborative VO start!')
     print(f'===== [CVO] Device: {device} (CPU: {args.worker_num})')
-    print(f'===== [CVO] EXP NAME: {args.exp_name} (Node: {args.node_num}, Average Method: {args.avg_method})')
+    print(f'===== [CVO] EXP NAME: {EXP_NAME} (Node: {args.node_num}, Average Method: {args.avg_method})')
     print(f'===== [CVO] Model: {args.model} (Optimizer: {args.optimizer}, Learning Rate: {args.learning_rate})')
     print(f'===== [CVO] Dataset: {args.data_name} (Batch Size: {args.batch_size})')
     print(f'===== [CVO] Image Crop(Width, Height): {args.image_width}, {args.image_height}')
@@ -144,8 +164,10 @@ if __name__ == '__main__':
             t1 = time()
             result = Server.test()
             print("==> ATE: %.4f,\t KITTI-R/t: %.4f, %.4f" %(result['ate_score'], result['kitti_score'][0], result['kitti_score'][1]))
-            plot_traj(result['gt_aligned'], result['est_aligned'], vis=False, savefigname='results/['+EXP_NAME+'] Round_'+str(R)+'.png', title='ATE %.4f' %(result['ate_score']))
-            np.savetxt('results/'+EXP_NAME+'.txt', result['est_aligned'])
+            if not os.path.exists(f'results/{EXP_NAME}'):
+                os.makedirs(f'results/{EXP_NAME}')
+            plot_traj(result['gt_aligned'], result['est_aligned'], vis=False, savefigname='results/'+EXP_NAME+'/['+EXP_NAME+'] Round_'+str(R)+'.png', title='ATE %.4f' %(result['ate_score']))
+            np.savetxt('results/'+EXP_NAME+'/'+EXP_NAME+'.txt', result['est_aligned'])
             print(f"Trajectory saved as [{EXP_NAME}] Round_{str(R)}.png")
             t2 = time()
             eval_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
