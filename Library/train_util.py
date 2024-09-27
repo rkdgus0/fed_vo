@@ -20,11 +20,13 @@ def pose_loss_fn(motion_est, motion_gt, epsilon=1e-6):
     # transformation loss
     trans_pred_norm = trans_est / torch.max(trans_est.norm(dim=1, keepdim=True), torch.tensor(epsilon).to(trans_est.device))
     trans_gt_norm = trans_gt / torch.max(trans_gt.norm(dim=1, keepdim=True), torch.tensor(epsilon).to(trans_gt.device))
-    #trans_loss_fn = F.l1_loss()
+    #trans_loss_fn = nn.MSELoss()
+    #trans_loss = trans_loss_fn(trans_pred_norm, trans_gt_norm)
     trans_loss = F.l1_loss(trans_pred_norm, trans_gt_norm)
 
     # rotation loss
-    #rot_loss_fn = F.l1_loss()
+    #rot_loss_fn = nn.MSELoss()
+    #rot_loss = rot_loss_fn(rot_est, rot_gt)
     rot_loss = F.l1_loss(rot_est, rot_gt)
 
     # pose loss
@@ -32,7 +34,7 @@ def pose_loss_fn(motion_est, motion_gt, epsilon=1e-6):
 
     return pose_loss, trans_loss, rot_loss
 
-def loss_function(model, sample, lambda_flow, epsilon, device='cuda:0'):
+def whole_loss_function(model, sample, lambda_flow, epsilon, device='cuda:0'):
     sample = {k: v.to(device) for k, v in sample.items()} 
     # inputs-------------------------------------------------------------------
     img1 = sample['img1']
@@ -56,6 +58,22 @@ def loss_function(model, sample, lambda_flow, epsilon, device='cuda:0'):
     total_loss = flow_loss*lambda_flow + pose_loss
     
     return total_loss, flow_loss, pose_loss, trans_loss, rot_loss
+
+def flow_loss_function(model, sample, device='cuda:0'):
+    sample = {k: v.to(device) for k, v in sample.items()} 
+    # inputs-------------------------------------------------------------------
+    img1 = sample['img1']
+    img2 = sample['img2']
+
+    # forward------------------------------------------------------------------
+    flow_est = model([img1,img2])
+
+    # loss calculation---------------------------------------------------------
+    flow_gt = sample['flow']
+
+    flow_loss = flow_loss_fn(flow_est, flow_gt)
+    
+    return flow_loss
 
 def process_pose_sample(model, sample, device_id):
     """

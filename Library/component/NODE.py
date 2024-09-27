@@ -11,23 +11,22 @@ from torch.optim.lr_scheduler import ExponentialLR
 from time import time, strftime, gmtime
 from copy import deepcopy
 from torch.utils.data import DataLoader
-from Library.train_util import process_pose_sample, process_whole_sample, loss_function
+from Library.train_util import process_pose_sample, process_whole_sample, whole_loss_function, flow_loss_function
 
 
 class NODE():
-    def __init__(self, model, optimizer, scheduler, datasets, iteration, batch_size, worker_num, device='cuda:0'):
+    def __init__(self, model, optimizer, scheduler, datasets, epoch, batch_size, worker_num, device='cuda:0'):
         super(NODE, self).__init__()
         self.datasets = datasets
-        self.iteration = iteration
+        self.epoch = epoch
         self.batch_size = batch_size
         self.worker_num = worker_num
         self.device = device
         self.model = model.to(device)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        
 
-    def train(self, node_idx, model_parameters):
+    def train(self, node_idx, model_parameters, model_name):
         self.model.load_state_dict(model_parameters) #global model
 
         # setting node's train data
@@ -35,17 +34,20 @@ class NODE():
         trainDataloader = DataLoader(train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.worker_num)
         self.model.train()
 
-        for curr_iter in range(self.iteration):
-            #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration} Start!")
+        for curr_iter in range(self.epoch):
+            #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.epoch} Start!")
             t1 = time()
             for sample in trainDataloader:
                 self.optimizer.zero_grad()
                 #self.model.zero_grad()
-
-                total_loss, flow_loss, pose_loss, trans_loss, rot_loss = loss_function(self.model, sample, 10, 1e-6, self.device)
-                total_loss.backward()
+                
+                if model_name.lower() == 'vonet': 
+                    loss, flow_loss, pose_loss, trans_loss, rot_loss = whole_loss_function(self.model, sample, 10, 1e-6, self.device)
+                elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
+                    loss = flow_loss_function(self.model, sample, self.device)
+                loss.backward()
                     
-                    # print(f"total loss: {total_loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
+                    # print(f"total loss: {loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
                 #before_update = {name: param.clone() for name, param in self.model.named_parameters()}
 
                 # optimizer step 호출
@@ -57,11 +59,11 @@ class NODE():
                     update = param - before_update[name]
                     print(f"Layer {name} update norm: {update.norm()}")'''
             
-                #print(f"Node {node_idx+1}, Local Loss: {total_loss.item()}")
+                #print(f"Node {node_idx+1}, Local Loss: {loss.item()}")
             self.scheduler.step()
             t2 = time()
             iter_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
-            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.iteration}, Local Loss: {total_loss.item()}, Time: {iter_time}")
+            print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.epoch}, Local Loss: {loss.item()}, Time: {iter_time}")
 
     def set_lr(self, lr):
         for param_group in self.optimizer.param_groups:
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     node_num = 3
     transform = Compose([CropCenter((640, 448)), DownscaleFlow(), ToTensor()])
     test_environments = ['ocean', 'office2', 'soulcity', 'carwelding', 'abandonedfactory_night', 'seasonsforest', 'neighborhood', 'japanesealley', 'oldtown', 'carwelding', 'seasonsforest_winter', 'westerndesert', 'office', 'hospital', 'gascola', 'amusement', 'testDatset']
-    iteration = 2
+    epoch = 2
     batch_size = 64
     worker = 32
     sequence = 'P001'
@@ -104,7 +106,7 @@ if __name__ == '__main__':
     print("Success to init model parameter!\n")
 
     print("Init Node component...")
-    Node =  NODE(model, optimizer, scheduler, init_lr=0.01, datasets=train_data, iteration=iteration, batch_size=batch_size, worker_num=worker, device=device)
+    Node =  NODE(model, optimizer, scheduler, init_lr=0.01, datasets=train_data, epoch=epoch, batch_size=batch_size, worker_num=worker, device=device)
 
     print(f'Node num: {len(train_data)}')
     for node_idx, train_dataset in enumerate(train_data):

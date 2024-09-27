@@ -28,7 +28,7 @@ class SERVER():
 
     # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average하는 코드
     #TODO 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
-    def train(self):
+    def train(self, model_name):
         model_parameter = self.model.state_dict()
         node_state_dicts = []
         participating_node = []
@@ -40,7 +40,7 @@ class SERVER():
             else:
                 self.nodes.optimizer.zero_grad()
                 #before_update = {name: param.clone() for name, param in self.model.named_parameters()}
-                self.nodes.train(node_idx, model_parameter)
+                self.nodes.train(node_idx, model_parameter, model_name)
                 participating_node.append(node_idx)
                 node_state_dict = self.nodes.model.state_dict()
                 node_state_dicts.append(node_state_dict)

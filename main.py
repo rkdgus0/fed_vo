@@ -61,9 +61,9 @@ def get_args():
     # global_round: 전체 학습 round
     parser.add_argument('--global_round', '-round', type=int, default=20,
                         help='total number of Global round (default: 1)')
-    # local_iteration: 각 node의 iteration 횟수
-    parser.add_argument('--local_iteration', '-iter', type=int, default=2,
-                        help='total number of local iteration per each node (default: 1)')
+    # local_epoch: 각 node의 epoch 횟수
+    parser.add_argument('--local_epoch', '-iter', type=int, default=2,
+                        help='total number of local epoch per each node (default: 1)')
     # learning_rate: model의 learning rate
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4,
                         help='model learning rate (default: 1e-4)')
@@ -108,7 +108,8 @@ if __name__ == '__main__':
 
     NUM_NODE = args.node_num
     GLOBAL_ROUND = args.global_round
-    LOCAL_ROUND = args.local_iteration
+    LOCAL_ROUND = args.local_epoch
+    MODEL_NAME = args.model
     DATASET_NAME = args.data_name
     EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
     TEST_ENVS=['ocean']
@@ -126,7 +127,7 @@ if __name__ == '__main__':
     t1 = time()
     transform = Compose([CropCenter((args.image_height, args.image_width)), DownscaleFlow(), ToTensor()])
     # Can change test environments
-    train_data, test_data, node_env_mapping = initial_dataset(data_name=DATASET_NAME, root_dir=args.data_path, easy_hard=args.easy_hard, 
+    train_data, test_data, total_num_data = initial_dataset(data_name=DATASET_NAME, root_dir=args.data_path, easy_hard=args.easy_hard, 
                                                               sequence=args.sequence, node_num=NUM_NODE, transform=transform, test_environments=TEST_ENVS, split_mode=args.data_mode)
     t2 = time()
     print(f'===== success to split Server & Node dataset(test, train)! (Time(sec): {round(t2-t1,2)})\n')
@@ -139,7 +140,7 @@ if __name__ == '__main__':
     print(f'===== Success to compose Server & Nodes! (Time(sec): {round(t2-t1,2)})\n')
     
     #summaryWriter = SummaryWriter(f'runs/{EXP_NAME}')
-    #start_epoch,iteration = load_checkpoint(model, optimizer, scheduler, args.model_name)
+    #start_epoch,epoch = load_checkpoint(model, optimizer, scheduler, args.model_name)
 
     print(f'Federated Collaborative VO start!')
     print(f'===== [CVO] Device: {device} (CPU: {args.worker_num})')
@@ -154,12 +155,12 @@ if __name__ == '__main__':
     for R in range(1, GLOBAL_ROUND+1):
         print(f'===== Global Round {R} Train start!')
         t1 = time()
-        Server.train()
+        Server.train(MODEL_NAME)
         t2 = time()
         round_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))
         print(f'[Global Round {R}] Train Time(sec): {round_time}\n')
 
-        if R % args.eval_round == 0 or R == GLOBAL_ROUND+1:
+        if (R % args.eval_round == 0 or R == GLOBAL_ROUND+1) and (MODEL_NAME.lower() == 'vonet'):
             print(f'===== Global Round {R} Evaluate start!')
             t1 = time()
             result = Server.test()

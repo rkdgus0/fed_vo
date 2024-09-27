@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import LambdaLR, ExponentialLR
 
 from Network.VONet import VONet
 from Network.PWC import PWCDCNet as FlowNet
+from Network.PWC import pwc_dc_net
 from Network.VOFlowNet import VOFlowRes as FlowPoseNet
 
 from Library.component.NODE import NODE
@@ -32,12 +33,12 @@ def compose_server(args, model, nodes, test_data, train_data, device):
                   num_node_data, batch_size, worker_num, device)
 
 def compose_node(args, model, optimizer, scheduler, train_data, device):
-    iteration = args.local_iteration
+    epoch = args.local_epoch
     batch_size = args.batch_size
     worker_num = args.worker_num
 
     return NODE(model, optimizer, scheduler, train_data,  
-                iteration, batch_size, worker_num, device)
+                epoch, batch_size, worker_num, device)
 
 #FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
 def lambda_controller(global_round, current_round):
@@ -52,8 +53,9 @@ def init_model(model_name, optimizer, lr):
     if model_name.lower() == 'vonet':
         model = torch.nn.DataParallel(VONet())
     elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
-        model = torch.nn.DataParallel(FlowNet())
-        mode.pwc_dc_net('../../data/pwc_net_chairs.pth.tar')
+        #model = torch.nn.DataParallel(FlowNet())
+        model = pwc_dc_net('data/pwc_net_chairs.pth.tar')
+        model = torch.nn.DataParallel(model)
     elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
         model = torch.nn.DataParallel(FlowPoseNet())
     
@@ -67,10 +69,10 @@ def init_model(model_name, optimizer, lr):
     return model, optimizer, scheduler
 
 # ===== Model Parameter Save/Load function =====
-def save_checkpoint(model, optimizer, scheduler, global_round, iteration, filepath):
+def save_checkpoint(model, optimizer, scheduler, global_round, epoch, filepath):
     torch.save({
         'global_round': global_round,
-        'local_iteration': iteration,
+        'local_epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
@@ -85,9 +87,9 @@ def load_checkpoint(model, optimizer=None, scheduler=None, filepath="",map_locat
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     if scheduler is not None and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    iteration = checkpoint['iteration']
+    epoch = checkpoint['epoch']
     print(f"successfully load model from {filepath}")
-    return iteration
+    return epoch
 
 # ===== Test Trajectory Plot function =====
 def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):
