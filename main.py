@@ -3,6 +3,7 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,4,5,6,7"
 
 from time import time, strftime, gmtime
 import torch
@@ -62,7 +63,7 @@ def get_args():
     parser.add_argument('--global_round', '-round', type=int, default=20,
                         help='total number of Global round (default: 1)')
     # local_epoch: 각 node의 epoch 횟수
-    parser.add_argument('--local_epoch', '-iter', type=int, default=2,
+    parser.add_argument('--local_epoch', '-epoch', type=int, default=2,
                         help='total number of local epoch per each node (default: 1)')
     # learning_rate: model의 learning rate
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4,
@@ -70,9 +71,13 @@ def get_args():
     
     # ====== Dataset Setting ======
     # dataset: train과 test에 사용할 dataset
-    parser.add_argument('--data_name', '-dataset', type=str, default='tartanair',
+    parser.add_argument('--train_data_name', '-train_dataset', type=str, default='tartanair',
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
-    parser.add_argument('--data_path', '-path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
+    parser.add_argument('--test_data_name', '-test_dataset', type=str, default='kitti',
+                        help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
+    parser.add_argument('--train_data_path', '-train_path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
+                        help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
+    parser.add_argument('--test_data_path', '-test_path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
                         help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
     parser.add_argument('--easy_hard', '-e_h', type=str, default='Easy',
                         help="Dataset type(select: Easy, Hard, *), (default: Easy)")
@@ -110,7 +115,10 @@ if __name__ == '__main__':
     GLOBAL_ROUND = args.global_round
     LOCAL_ROUND = args.local_epoch
     MODEL_NAME = args.model
-    DATASET_NAME = args.data_name
+    TRAIN_DATASET_NAME = args.train_data_name
+    TEST_DATASET_NAME = args.test_data_name
+    TRAIN_DIR = args.train_data_path
+    TEST_DIR = args.test_data_path
     EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
     TEST_ENVS=['ocean']
 
@@ -127,7 +135,7 @@ if __name__ == '__main__':
     t1 = time()
     transform = Compose([CropCenter((args.image_height, args.image_width)), DownscaleFlow(), ToTensor()])
     # Can change test environments
-    train_data, test_data, total_num_data = initial_dataset(data_name=DATASET_NAME, root_dir=args.data_path, easy_hard=args.easy_hard, 
+    train_data, test_data, total_num_data = initial_dataset(train_data_name=TRAIN_DATASET_NAME, test_data_name=TEST_DATASET_NAME, train_dir=TRAIN_DIR, test_dir=TEST_DIR, easy_hard=args.easy_hard, 
                                                               sequence=args.sequence, node_num=NUM_NODE, transform=transform, test_environments=TEST_ENVS, split_mode=args.data_mode)
     t2 = time()
     print(f'===== success to split Server & Node dataset(test, train)! (Time(sec): {round(t2-t1,2)})\n')
@@ -146,7 +154,7 @@ if __name__ == '__main__':
     print(f'===== [CVO] Device: {device} (CPU: {args.worker_num})')
     print(f'===== [CVO] EXP NAME: {EXP_NAME} (Node: {args.node_num}, Average Method: {args.avg_method})')
     print(f'===== [CVO] Model: {args.model} (Optimizer: {args.optimizer}, Learning Rate: {args.learning_rate})')
-    print(f'===== [CVO] Dataset: {args.data_name} (Batch Size: {args.batch_size})')
+    print(f'===== [CVO] Train Dataset: {TRAIN_DATASET_NAME}, Test_Dataset: {TEST_DATASET_NAME} (Batch Size: {args.batch_size})')
     print(f'===== [CVO] Image Crop(Width, Height): {args.image_width}, {args.image_height}')
     print(f'===== [CVO] Dataset Path: {args.data_path} (Easy or Hard: {args.easy_hard})')
     print(f'===== [CVO] Global Round: {GLOBAL_ROUND}, Local Iteration: {LOCAL_ROUND} Start!\n')

@@ -22,6 +22,7 @@ class TartanAirDataset(Dataset):
         self.data_name = data_name
         self.root_dir = root_dir
         self.transform = transform
+        self.easy_hard = easy_hard
         self.sequence = sequence
         self.motions = []
         self.image_files = []
@@ -32,12 +33,6 @@ class TartanAirDataset(Dataset):
         self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics(self.data_name)
         #self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
         
-        if easy_hard.lower() == 'easy':
-            self.easy_hard = 'Easy'
-        elif easy_hard.lower() == 'hard':
-            self.easy_hard = 'Hard'
-        else:
-            self.easy_hard = '*'
         
         if environments is None:
             environments = os.listdir(root_dir)
@@ -46,7 +41,10 @@ class TartanAirDataset(Dataset):
             environments = [env for env in environments if os.path.exists(os.path.join(root_dir, env))]
 
         for environment in environments:
-            env_path = os.path.join(root_dir, environment, self.easy_hard, self.sequence)
+            if data_name.lower() =='tartanair':
+                env_path = os.path.join(root_dir, environment, self.easy_hard, self.sequence)
+            else:
+                env_path = root_dir
             image_dirs = glob.glob(os.path.join(env_path, 'image_left'))
             pose_files = glob.glob(os.path.join(env_path, 'pose_left.txt'))
             flow_dirs = glob.glob(os.path.join(env_path, 'flow'))
@@ -107,7 +105,7 @@ class TartanAirDataset(Dataset):
         
         
 
-def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transform, test_environments=['ocean'], split_mode='basic'):
+def initial_dataset(train_data_name, test_data_name, train_dir, test_dir, easy_hard, sequence, node_num, transform, test_environments=['ocean'], split_mode='basic'):
     """
     Returns:
         tuple: (train_dataset, test_dataset)으로 분할된 데이터셋
@@ -116,7 +114,16 @@ def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transfor
     """
     
     # test dataset
-    test_dataset = TartanAirDataset(data_name=data_name, root_dir=root_dir, easy_hard=easy_hard, sequence='P001', environments=test_environments, transform=transform)
+    if easy_hard.lower() == 'easy':
+        easy_hard = 'Easy'
+        test_eh = 'Easy'
+    elif easy_hard.lower() == 'hard':
+        easy_hard = 'Hard'
+        test_eh = 'Hard'
+    else:
+        easy_hard = '*'
+        test_eh = 'Easy'
+    test_dataset = TartanAirDataset(data_name=test_data_name, root_dir=test_dir, easy_hard=test_eh, sequence='P001', environments=test_environments, transform=transform)
     
     # train dataset
     # node에 순차적으로 배정
@@ -138,7 +145,7 @@ def initial_dataset(data_name, root_dir, easy_hard, sequence, node_num, transfor
         node_index = i % node_num
         node_env_mapping[node_index].append(environment)
     
-    train_datasets = [TartanAirDataset(data_name=data_name, root_dir=root_dir, easy_hard=easy_hard, sequence=sequence, environments=node_envs, transform=transform)
+    train_datasets = [TartanAirDataset(data_name=train_data_name, root_dir=train_dir, easy_hard=easy_hard, sequence=sequence, environments=node_envs, transform=transform)
                       for node_envs in node_env_mapping if node_envs]
     
     print("[Test Dataset]")

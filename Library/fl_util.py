@@ -23,7 +23,12 @@ def compose_server(args, model, nodes, test_data, train_data, device):
     avg_method = args.avg_method
     batch_size = args.batch_size
     worker_num = args.worker_num
-    test_data_path = f"{args.data_path}/ocean/{args.easy_hard}/P001/pose_left.txt"
+    if args.easy_hard.lower() == 'hard':
+        easy_hard = 'Hard'
+    else:
+        easy_hard = 'Easy'
+    test_data_path = f"{args.data_path}/ocean/{easy_hard}/P001/pose_left.txt"
+
     
     num_node_data = []
     for node_idx, train_dataset in enumerate(train_data):
