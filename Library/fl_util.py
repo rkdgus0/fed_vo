@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import LambdaLR, ExponentialLR
 from Network.VONet import VONet
 from Network.PWC import PWCDCNet as FlowNet
 from Network.PWC import pwc_dc_net
-from Network.VOFlowNet import VOFlowRes as FlowPoseNet
+from Network.VOFlowNet import VOFlowRes as PoseNet
 
 from Library.component.NODE import NODE
 from Library.component.SERVER import SERVER
@@ -62,7 +62,7 @@ def init_model(model_name, optimizer, lr):
         model = pwc_dc_net('data/pwc_net_chairs.pth.tar')
         model = torch.nn.DataParallel(model)
     elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
-        model = torch.nn.DataParallel(FlowPoseNet())
+        model = torch.nn.DataParallel(PoseNet())
     
     if optimizer.lower() == 'adam':
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)

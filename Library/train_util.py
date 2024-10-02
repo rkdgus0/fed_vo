@@ -75,118 +75,24 @@ def flow_loss_function(model, sample, device='cuda:0'):
     
     return flow_loss
 
-def process_pose_sample(model, sample, device_id):
-    """
-    모델과 샘플을 받아서 예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산하는 함수
-    
-    Args:
-        model (nn.Module): VONet 모델
-        sample (dict): 배치 샘플로, 'img1', 'img2', 'intrinsic', 'motion' 키를 포함
-        device (torch.device): 연산에 사용할 디바이스(CPU 또는 GPU)
-    
-    Returns:
-        tuple: loss
-    """
-    img1 = sample['img1'].to(device_id)         # [B, 3, H, W]
-    img2 = sample['img2'].to(device_id)         # [B, 3, H, W]
-    intrinsic = sample['intrinsic'].to(device_id)  # [B, 3, 3]
-    motion_gt = sample['motion'].to(device_id)  # [B, 6] -> [tx, ty, tz, rx, ry, rz]
-    
-    model_output = model([img1, img2, intrinsic])
-    flow_pred, pose_pred = model_output      # flow_pred: [B, 2, H, W], pose_pred: [B, 6]
-    
-    # Only Total Pose Loss
-    # loss_fn = nn.MSELoss()
-    # loss = loss_fn(pose_pred, motion_gt)
-
-    # Using Total Pose loss: trans Loss + Rotate Loss
-    total_loss, trans_loss, rot_loss = calculate_pose_loss(pose_pred, motion_gt)
-
-    
-    return total_loss, trans_loss, rot_loss
-    #return loss
-
-def calculate_pose_loss(pose_pred, pose_gt, trans_weight=1.0, rot_weight=1.0):
-    """
-    예측 포즈와 그라운드 트루스 포즈 간의 손실을 계산
-    
-    Args:
-        pose_pred (torch.Tensor): 예측된 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
-        pose_gt (torch.Tensor): 그라운드 트루스 포즈 [B, 6] -> [tx, ty, tz, rx, ry, rz]
-        trans_weight (float): 변환 손실 가중치
-        rot_weight (float): 회전 손실 가중치
-    
-    Returns:
-        tuple: (total_loss, trans_loss, rot_loss)
-    """
-    trans_pred = pose_pred[:, :3]
-    rot_pred = pose_pred[:, 3:]
-    
-    trans_gt = pose_gt[:, :3]
-    rot_gt = pose_gt[:, 3:]
-    
-    # trans loss
-    trans_loss_fn = nn.MSELoss()
-    trans_loss = trans_loss_fn(trans_pred, trans_gt)
-    
-    # rotation loss
-    rot_loss_fn = nn.MSELoss()
-    rot_loss = rot_loss_fn(rot_pred, rot_gt)
-    
-    total_loss = trans_weight*trans_loss + rot_weight*rot_loss
-    
-    return total_loss, trans_loss, rot_loss
-
-def process_whole_sample(model,sample,lambda_flow,device_id):
-    sample = {k: v.to(device_id) for k, v in sample.items()} 
-    # inputs-------------------------------------------------------------------
-    img1 = sample['img1']
-    img2 = sample['img2']
-    intrinsic_layer = sample['intrinsic']
-        
-    # forward------------------------------------------------------------------
-    flow, relative_motion = model([img1,img2,intrinsic_layer])
-
-
-    # loss calculation---------------------------------------------------------
-    flow_gt = sample['flow']
-    motions_gt = sample['motion']
-    get_loss = nn.MSELoss()
-    flow_loss = get_loss(flow,flow_gt)
-    pose_loss,trans_loss,rot_loss = calculate_pose_loss(relative_motion, motions_gt)
-    total_loss = flow_loss*lambda_flow + pose_loss
-    
-    return total_loss,flow_loss,pose_loss,trans_loss,rot_loss
-
-def process_flow_sample(model, sample, device_id):
-    sample = {k: v.to(device_id) for k, v in sample.items()} 
-    # inputs-------------------------------------------------------------------
-    img1 = sample['img1']
-    img2 = sample['img2']
-        
-    # forward------------------------------------------------------------------
-    flow = model([img1,img2])
-    # loss calculation---------------------------------------------------------
-    flow_gt = sample['flow']
-    flow_loss =  model.module.get_loss(flow,flow_gt,small_scale=True)
-    return flow_loss
-
-def process_flowpose_sample(model,sample,device_id):
-    sample = {k: v.to(device_id) for k, v in sample.items()} 
+def pose_loss_function(model, sample, epsilon, device='cuda:0'):
+    sample = {k: v.to(device) for k, v in sample.items()}
     # inputs-------------------------------------------------------------------
     intrinsic_layer = sample['intrinsic']
     flow_gt = sample['flow']
         
-    flow_input = torch.cat( ( flow_gt, intrinsic_layer ), dim=1 ) 
+    flow_input = torch.cat( ( flow_gt, intrinsic_layer ), dim=1 )
+
     # forward------------------------------------------------------------------
-    relative_motion = model(flow_input)
+    motion_est = model(flow_input)
 
 
     # loss calculation---------------------------------------------------------
-    motions_gt = sample['motion']
-    total_loss,trans_loss,rot_loss = calculate_pose_loss(relative_motion, motions_gt,device_id)
+    motion_gt = sample['motion']
+
+    pose_loss, trans_loss, rot_loss = pose_loss_fn(motion_est, motion_gt, epsilon)
     
-    return total_loss,trans_loss,rot_loss
+    return pose_loss, trans_loss, rot_loss
 
 def test_pose_batch(model, sample):
     model.eval()

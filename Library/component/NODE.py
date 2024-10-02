@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 from time import time, strftime, gmtime
 from copy import deepcopy
 from torch.utils.data import DataLoader
-from Library.train_util import process_pose_sample, process_whole_sample, whole_loss_function, flow_loss_function
+from Library.train_util import whole_loss_function, flow_loss_function, pose_loss_function
 
 
 class NODE():
@@ -46,7 +46,7 @@ class NODE():
                 elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
                     loss = flow_loss_function(self.model, sample, self.device)
                 elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
-                    loss = flowpose_loss_function()
+                    loss = pose_loss_function(self.model, sample, 1e-6, self.device)
                 loss.backward()
                     
                     # print(f"total loss: {loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
