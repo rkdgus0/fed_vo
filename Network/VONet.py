@@ -41,7 +41,7 @@ class VONet(nn.Module):
         super(VONet, self).__init__()
 
         #self.flowNet     = FlowNet()
-        self.flowNet = pwc_dc_net('data/pwc_net_chairs.pth.tar')
+        self.flowNet = pwc_dc_net('models/pwc_net_chairs.pth.tar')
         self.flowPoseNet = FlowPoseNet()
 
     def forward(self, x):

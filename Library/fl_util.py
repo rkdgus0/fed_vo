@@ -27,7 +27,7 @@ def compose_server(args, model, nodes, test_data, train_data, device):
         easy_hard = 'Hard'
     else:
         easy_hard = 'Easy'
-    test_data_path = f"{args.data_path}/ocean/{easy_hard}/P001/pose_left.txt"
+    test_data_path = args.test_data_path
 
     
     num_node_data = []

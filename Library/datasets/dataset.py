@@ -32,45 +32,50 @@ class TartanAirDataset(Dataset):
         
         self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics(self.data_name)
         #self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
-        
-        
-        if environments is None:
-            environments = os.listdir(root_dir)
-            print("Invalid Input Environment!")
-        else:
+        if environments is not None:
             environments = [env for env in environments if os.path.exists(os.path.join(root_dir, env))]
 
-        for environment in environments:
-            if data_name.lower() =='tartanair':
+        if data_name.lower() != 'tartanair':
+            image_dirs = glob.glob(os.path.join(root_dir, 'image_left'))
+            pose_files = glob.glob(os.path.join(root_dir, 'pose_left.txt'))
+            flow_dir = os.path.join(root_dir, 'flow') if os.path.exists(os.path.join(root_dir, 'flow')) else None
+
+            for image_dir, pose_file in zip(image_dirs, pose_files):
+                self.load_data_from_dirs(image_dir, pose_file, flow_dir)
+
+        else:
+            for environment in environments:
                 env_path = os.path.join(root_dir, environment, self.easy_hard, self.sequence)
-            else:
-                env_path = root_dir
-            image_dirs = glob.glob(os.path.join(env_path, 'image_left'))
-            pose_files = glob.glob(os.path.join(env_path, 'pose_left.txt'))
-            flow_dirs = glob.glob(os.path.join(env_path, 'flow'))
+                image_dirs = glob.glob(os.path.join(env_path, 'image_left'))
+                pose_files = glob.glob(os.path.join(env_path, 'pose_left.txt'))
+                flow_dirs = glob.glob(os.path.join(env_path, 'flow'))
 
-            for flow_dir, image_dir, pose_file in zip(flow_dirs,image_dirs, pose_files):
-                image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
-                flow_files = sorted(glob.glob(os.path.join(flow_dir, '*flow.npy')))
-                start_idx = len(self.image_files)  # 시퀀스 시작 위치
-                self.sequence_starts.append(start_idx)
-                self.image_files.extend(image_files)
-                self.flow_files.extend(flow_files)
-                self.flow_files.append(flow_files[-1]) #더미 값 추가
+                for image_dir, pose_file, flow_dir in zip(image_dirs, pose_files, flow_dirs):
+                    self.load_data_from_dirs(image_dir, pose_file, flow_dir)
 
-                # pose list to motion and matrix
-                self.poselist = np.loadtxt(pose_file).astype(np.float32)
-                assert(self.poselist.shape[1]==7)
-                poses = pos_quats2SEs(self.poselist)
-                matrix = pose2motion(poses)
-                motions = SEs2ses(matrix).astype(np.float32)
-                self.motions.extend(motions)
-                self.motions.append(motions[-1]) #더미 값 추가
-                assert(len(self.motions) == len(self.image_files))
-                assert(len(self.motions) == len(self.flow_files))
-                
+    def load_data_from_dirs(self, image_dir, pose_file, flow_dir=None):
+        image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
+        start_idx = len(self.image_files)  # 시퀀스 시작 위치
+        self.sequence_starts.append(start_idx)
+        self.image_files.extend(image_files)
 
-                
+        if flow_dir:
+            flow_files = sorted(glob.glob(os.path.join(flow_dir, '*flow.npy')))
+            self.flow_files.extend(flow_files)
+            self.flow_files.append(flow_files[-1])  # 더미 값 추가
+
+        # pose list to motion and matrix
+        self.poselist = np.loadtxt(pose_file).astype(np.float32)
+        assert self.poselist.shape[1] == 7
+        poses = pos_quats2SEs(self.poselist)
+        matrix = pose2motion(poses)
+        motions = SEs2ses(matrix).astype(np.float32)
+        self.motions.extend(motions)
+        self.motions.append(motions[-1])  # 더미 값 추가
+
+        assert len(self.motions) == len(self.image_files)
+
+
             #print(f"[{environment}] motion len: {len(self.motions)}, img len: {len(self.image_files)}")
         
     def __len__(self):
@@ -85,14 +90,24 @@ class TartanAirDataset(Dataset):
         img1 = cv2.imread(img_path1)
         img2 = cv2.imread(img_path2)
         
+        
+        flowfile = self.flow_files[idx].strip()
+        flow = np.load(flowfile) / self.flownorm
+
+
         flowfile = self.flow_files[idx].strip()
         flow = np.load(flowfile) / self.flownorm
 
         h, w, _ = img1.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.focalx, self.focaly, self.centerx, self.centery)
         
-        res = {'img1': img1, 'img2': img2, 'intrinsic': intrinsicLayer, 'flow': flow}
+        res = {'img1': img1, 'img2': img2, 'intrinsic': intrinsicLayer}
         
+        if self.flow_files is not None:
+            flowfile = self.flow_files[idx].strip()
+            flow = np.load(flowfile) / self.flownorm
+            res['flow'] = flow
+
         if self.transform:
             res = self.transform(res)
         
@@ -127,7 +142,7 @@ def initial_dataset(train_data_name, test_data_name, train_dir, test_dir, easy_h
     
     # train dataset
     # node에 순차적으로 배정
-    all_environments = os.listdir(root_dir)
+    all_environments = os.listdir(train_dir)
     if split_mode == 'basic':
         train_environments = [env for env in all_environments if env not in set(test_environments)]
     elif split_mode == 'all':
@@ -149,7 +164,9 @@ def initial_dataset(train_data_name, test_data_name, train_dir, test_dir, easy_h
                       for node_envs in node_env_mapping if node_envs]
     
     print("[Test Dataset]")
-    print(f"  Number of Test Environment: {len(test_environments)}")
+    if test_data_name.lower() == 'tartanair':
+        print(f"  Number of Test Environment: {len(test_environments)}")
+    
     print(f"  [Server] Number of Data: {len(test_dataset.motions)}")
     print("[Train Dataset]")
     print(f"  Number of Train Environment: {len(train_environments)}")

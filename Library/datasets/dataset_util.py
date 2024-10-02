@@ -237,11 +237,11 @@ def load_kiiti_intrinsics(filename):
 # ======= dataset preprocessing =======
 #XXX 어차피 tartanAir만 쓸거면 필요없음.
 def dataset_intrinsics(dataset='tartanair'):
-    if dataset == 'kitti':
+    if dataset.lower() == 'kitti':
         focalx, focaly, centerx, centery = 707.0912, 707.0912, 601.8873, 183.1104
-    elif dataset == 'euroc':
+    elif dataset.lower() == 'euroc':
         focalx, focaly, centerx, centery = 458.6539916992, 457.2959899902, 367.2149963379, 248.3750000000
-    elif dataset == 'tartanair':
+    elif dataset.lower() == 'tartanair':
         focalx, focaly, centerx, centery = 320.0, 320.0, 320.0, 240.0
     else:
         return None

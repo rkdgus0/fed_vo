@@ -75,10 +75,10 @@ def get_args():
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
     parser.add_argument('--test_data_name', '-test_dataset', type=str, default='kitti',
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
-    parser.add_argument('--train_data_path', '-train_path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
+    parser.add_argument('--train_data_path', '-train_path', type=str, default='/Dataset/tartanAir/train_data/',
                         help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
-    parser.add_argument('--test_data_path', '-test_path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
-                        help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
+    parser.add_argument('--test_data_path', '-test_path', type=str, default='data/KITTI_10',
+                        help="Dataset folde path, (default: data/KITTI_10)")
     parser.add_argument('--easy_hard', '-e_h', type=str, default='Easy',
                         help="Dataset type(select: Easy, Hard, *), (default: Easy)")
     parser.add_argument('--sequence', '-seq', type=str, default='*',
@@ -120,7 +120,10 @@ if __name__ == '__main__':
     TRAIN_DIR = args.train_data_path
     TEST_DIR = args.test_data_path
     EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
-    TEST_ENVS=['ocean']
+    if TEST_DATASET_NAME.lower() == 'tartanair':
+        TEST_ENVS = ['ocean']
+    else:
+        TEST_ENVS = None
 
     print('===== init the model & optimizer & scheduler ..')
     t1 = time()
@@ -156,7 +159,7 @@ if __name__ == '__main__':
     print(f'===== [CVO] Model: {args.model} (Optimizer: {args.optimizer}, Learning Rate: {args.learning_rate})')
     print(f'===== [CVO] Train Dataset: {TRAIN_DATASET_NAME}, Test_Dataset: {TEST_DATASET_NAME} (Batch Size: {args.batch_size})')
     print(f'===== [CVO] Image Crop(Width, Height): {args.image_width}, {args.image_height}')
-    print(f'===== [CVO] Dataset Path: {args.data_path} (Easy or Hard: {args.easy_hard})')
+    print(f'===== [CVO] Train Dataset Path: {args.train_data_path}, Test Dataset Path: {args.test_data_path} (Easy or Hard: {args.easy_hard})')
     print(f'===== [CVO] Global Round: {GLOBAL_ROUND}, Local Iteration: {LOCAL_ROUND} Start!\n')
     
     t00 = time()
