@@ -29,9 +29,8 @@ class TartanAirDataset(Dataset):
         self.flow_files = []
         self.sequence_starts = []
         self.flownorm = 20.0
-        
         self.focalx, self.focaly, self.centerx, self.centery = dataset_intrinsics(self.data_name)
-        #self.focalx, self.focaly, self.centerx, self.centery = 320.0, 320.0, 320.0, 240.0
+
         if environments is not None:
             environments = [env for env in environments if os.path.exists(os.path.join(root_dir, env))]
 
@@ -75,8 +74,6 @@ class TartanAirDataset(Dataset):
 
         assert len(self.motions) == len(self.image_files)
 
-
-            #print(f"[{environment}] motion len: {len(self.motions)}, img len: {len(self.image_files)}")
         
     def __len__(self):
         return max(len(self.image_files)-1, 0)
@@ -163,11 +160,13 @@ def initial_dataset(train_data_name, test_data_name, train_dir, test_dir, easy_h
     print("[Train Dataset]")
     print(f"  Number of Train Environment: {len(train_environments)}")
     total_num_data = 0
-    for i, environment in enumerate(train_environments):
-        node_index = i % node_num
-        node_num_data = len(train_datasets[node_index].motions)
+    for node_idx in range(node_num):
+        node_num_data = 0
+        node_env = node_env_mapping[node_idx]
+        for i, environment in enumerate(node_env):
+            node_num_data += len(node_env[i])
         total_num_data += node_num_data
-        print(f"  [Node {i+1}] Env: {environment}, Number of Data: {node_num_data}")
+        print(f"  [Node {i+1}] Env: {node_env_mapping[node_idx]}, Number of Data: {node_num_data}")
     print(f"  [Node] Number of Train Environment data: {total_num_data}")
 
     return train_datasets, test_dataset, total_num_data

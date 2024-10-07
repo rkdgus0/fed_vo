@@ -93,29 +93,3 @@ def pose_loss_function(model, sample, epsilon, device='cuda:0'):
     pose_loss, trans_loss, rot_loss = pose_loss_fn(motion_est, motion_gt, epsilon)
     
     return pose_loss, trans_loss, rot_loss
-
-def test_pose_batch(model, sample):
-    model.eval()
-    # inputs-------------------------------------------------------------------
-    flow_gt = sample['flow']
-    motions_gt = sample['motion']
-    intrinsic_gt = sample['intrinsic']
-    # forward------------------------------------------------------------------
-    with torch.no_grad():
-        # batch shapes are [batch_size,channels, Height,Width]
-        # So concant on dimension 1 not 0
-        flow_input = torch.cat((flow_gt, intrinsic_gt), dim=1)
-        relative_motion = model(flow_input)
-        total_loss,trans_loss,rot_loss = calculate_pose_loss(relative_motion, motions_gt)
-       
-    relative_motion = relative_motion.cpu().numpy()
-    # if 'motion' in sample:
-    #     motions_gt = sample['motion'].cpu().numpy()
-    #     scale = np.linalg.norm(motions_gt[:,:3], axis=1)
-    #     trans_est = relative_motion[:,:3]
-    #     trans_est = trans_est/np.linalg.norm(trans_est,axis=1).reshape(-1,1)*scale.reshape(-1,1)
-    #     relative_motion[:,:3] = trans_est 
-    # else:
-    #     print('    scale is not given, using 1 as the default scale value..')
-
-    return relative_motion,total_loss,trans_loss,rot_loss

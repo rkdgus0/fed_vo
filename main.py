@@ -92,11 +92,13 @@ def get_args():
     parser.add_argument('--image_height', '-img_h', type=int, default=448,
                         help='image height (select: multiple of 64), (default: 448)')
 
-    #TODO Wandb 환경 세팅하기
     # ====== Wandb Setting ======
+    parser.add_argument("--wandb", "-wandb", action='store_true')
+    parser.add_argument("--wandb_id", "-wandb_id", type=str, default='create0327')
+    parser.add_argument("--wandb_api", "-wandb_api", type=str, default='b2f21ce10a4365a21cfce06ad41f9a7f23d34639', help="check at https://wandb.ai/authorize")
     # exp_name: Model의 weight와 학습 이후 Summary log 저장 path 설정 
-    parser.add_argument('--exp_name', '-exp', type=str, default='Test',
-                        help="Saving Path for weight&Summary (default: Test)")
+    parser.add_argument('--exp_name', '-exp', type=str, default='Test', help="Saving Path for weight&Summary (default: Test)")
+    parser.add_argument("--group_name", "-group_name", type=str, default='debug')
     # eval_round: Evaluation을 수행할 Round 주기
     parser.add_argument('--eval_round', '-eval', type=int, default=1,
                         help='Evaluation round (default: 1)')
@@ -123,6 +125,16 @@ if __name__ == '__main__':
     TRAIN_DIR = args.train_data_path
     TEST_DIR = args.test_data_path
     EXP_NAME = args.exp_name
+    WANDB = args.wandb
+    WANDB_ID = args.wandb_id
+    WANDB_API = args.wandb_api
+    if WANDB_API != None:
+        wandb.login(key=f"{WANDB_API}")
+
+    # Wandb init project & parameter
+    wandb.init(project="CVO", mode='online', group=f'{args.group_name}', entity=f'{WANDB_ID}', name=EXP_NAME)
+    wandb.config.update(args)
+
     #EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
     if TEST_DATASET_NAME.lower() == 'tartanair':
         TEST_ENVS = ['ocean']
@@ -170,6 +182,13 @@ if __name__ == '__main__':
     
     t00 = time()
     for R in range(1, GLOBAL_ROUND+1):
+        if R == int(GLOBAL_ROUND * 1/2):
+            for node in Server.nodes:
+                node.set_lr(0.2)
+
+        elif R == int(GLOBAL_ROUND * 7/8):
+            for node in Server.nodes:
+                node.set_lr(0.04)
         print(f'===== Global Round {R} Train start!')
         t1 = time()
         Server.train(MODEL_NAME)
@@ -182,6 +201,8 @@ if __name__ == '__main__':
             t1 = time()
             result = Server.test()
             print("==> ATE: %.4f,\t KITTI-R/t: %.4f, %.4f" %(result['ate_score'], result['kitti_score'][0], result['kitti_score'][1]))
+            if WANDB:
+                wandb.log({"ATE": result['ate_score'], "KITTI-R/t 1": result['kitti_score'][0], "KITTI-R/t 2": result['kitti_score'][1]}, step=R)
             if not os.path.exists(f'results/{EXP_NAME}'):
                 os.makedirs(f'results/{EXP_NAME}')
             plot_traj(result['gt_aligned'], result['est_aligned'], vis=False, savefigname='results/'+EXP_NAME+'/['+EXP_NAME+'] Round_'+str(R)+'.png', title='ATE %.4f' %(result['ate_score']))
@@ -194,5 +215,8 @@ if __name__ == '__main__':
     model_save_path = f'models/exp_{EXP_NAME}.pth'
     save_checkpoint(model, optimizer, scheduler, GLOBAL_ROUND, LOCAL_ROUND, model_save_path)
     t01 = time()
+    if WANDB:
+        wandb.save(f'csv_results/{EXP_NAME}.csv')
+        wandb.finish()
     total_time = strftime("%Hh %Mm %Ss", gmtime(t01-t00))
     print(f'===== Federated Collaborative VO Finished! (Time(sec): {total_time})\n')

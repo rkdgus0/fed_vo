@@ -35,12 +35,11 @@ class NODE():
         self.model.train()
 
         for curr_iter in range(self.epoch):
-            #print(f"Node {node_idx+1}, Iteration {curr_iter+1}/{self.epoch} Start!")
             t1 = time()
             for sample in trainDataloader:
                 self.optimizer.zero_grad()
-                #self.model.zero_grad()
                 
+                # Local Model Update
                 if model_name.lower() == 'vonet': 
                     loss, flow_loss, pose_loss, trans_loss, rot_loss = whole_loss_function(self.model, sample, 10, 1e-6, self.device)
                 elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
@@ -48,20 +47,8 @@ class NODE():
                 elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
                     loss, trans_loss, rot_loss = pose_loss_function(self.model, sample, 1e-6, self.device)
                 loss.backward()
-                    
-                    # print(f"total loss: {loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")
-                #before_update = {name: param.clone() for name, param in self.model.named_parameters()}
-
-                # optimizer step 호출
+                
                 self.optimizer.step()
-
-                # step 이후에 파라미터 값과 비교
-                '''print("\nParameter updates:")
-                for name, param in self.model.named_parameters():
-                    update = param - before_update[name]
-                    print(f"Layer {name} update norm: {update.norm()}")'''
-            
-                #print(f"Node {node_idx+1}, Local Loss: {loss.item()}")
             self.scheduler.step()
             t2 = time()
             iter_time = strftime("%Hh %Mm %Ss", gmtime(t2-t1))

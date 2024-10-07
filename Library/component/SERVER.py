@@ -27,19 +27,17 @@ class SERVER():
         self.pose_std = np.array([ 0.13,  0.13,  0.13,  0.013 ,  0.013,  0.013], dtype=np.float32)
         self.kittitype = test_data_name.lower() == 'kitti'
 
-    # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average하는 코드
+    # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average
     def train(self, model_name):
         model_parameter = self.model.state_dict()
         node_state_dicts = []
         participating_node = []
 
-        #for train_type in ['whole']:
         for node_idx in range(self.NUM_NODE):
             if len(self.nodes.datasets[node_idx]) == 0:
                 pass
             else:
                 self.nodes.optimizer.zero_grad()
-                #before_update = {name: param.clone() for name, param in self.model.named_parameters()}
                 self.nodes.train(node_idx, model_parameter, model_name)
                 participating_node.append(node_idx)
                 node_state_dict = self.nodes.model.state_dict()
@@ -47,7 +45,6 @@ class SERVER():
 
         avg_ratio = self.calc_avg_ratio(node_state_dicts, participating_node)
         print(f"avg ratio: {avg_ratio}")
-        #avg_ratio_tensor = torch.tensor(avg_ratio, dtype=torch.float32).view(-1, 1, 1, 1, 1)
         avg_model = self.average_model(node_state_dicts, avg_ratio)
 
         self.model.load_state_dict(avg_model)
@@ -56,9 +53,7 @@ class SERVER():
         node_state_dicts.clear()
         avg_model.clear()
 
-   
-   #TODO flownet/ posenet model 사용시, vonet을 선언해서 해당 모듈에 load_state_dict를 해야함
-   # model_name을 받아와야함.
+    # evaluate with test dataset and make the estimated trajectory
     def test(self):
         pose_preds = []
         pose_gts = []
@@ -76,6 +71,7 @@ class SERVER():
 
                 _, pose_pred = self.model([img1, img2, intrinsic])
                 pose_pred = pose_pred.cpu().numpy() * self.pose_std
+                
                 # transition의 size를 gt와 동일하게 설정
                 scale = np.linalg.norm(motion_gt[:,:3].cpu().numpy(), axis=1)
                 trans_pred = pose_pred[:,:3]
@@ -89,7 +85,7 @@ class SERVER():
         result = self.evaluator.evaluate_one_trajectory(pose_gts, pose_preds, scale=True, kittitype=self.kittitype)
         return result
 
-    # 모델 가중치 aggregation method(Fedavg: 데이터 수, Equal: 동등)
+    # make aggregate ratio(Fedavg: num of data, Equal: equal weight)
     def calc_avg_ratio(self, models, participating_node):
         ratio = []
         if self.avg_method == 'fedavg':
@@ -103,10 +99,7 @@ class SERVER():
         ratio = [r / sum(ratio) for r in ratio]
         return ratio
 
-    def set_lr(self, lr):
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-
+    # make global model
     def average_model(self, state_dicts, avg_ratio):
         total_sample_num = sum(avg_ratio)
         temp_sample_num = avg_ratio[0]
@@ -122,7 +115,11 @@ class SERVER():
         
         return state_avg
 
-#테스트용
+    def set_lr(self, lr):
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+
+#Debug
 from Library.datasets.dataset_util import ToTensor, Compose, CropCenter, DownscaleFlow, make_intrinsics_layer, dataset_intrinsics
 from Library.datasets.dataset import initial_dataset
 from Network.VONet import VONet

@@ -46,13 +46,13 @@ def compose_node(args, model, optimizer, scheduler, train_data, device):
                 epoch, batch_size, worker_num, device)
 
 #FIXME 현재 코드 상, lambda_controller가 작동하지 않을 것.
-def lambda_controller(global_round, current_round):
-        if current_round < 0.5 * globla_round:
-            return 1.0
-        elif current_round < 0.875 * globla_round:
-            return 0.2
-        else:
-            return 0.04
+def lr_lambda(iteration):
+    if iteration < 0.5 * total_iterations:
+        return 1.0
+    elif iteration < 0.875 * total_iterations:
+        return 0.2
+    else:
+        return 0.04
 
 def init_model(model_name, optimizer, lr, device, model_path=None):
     if model_name.lower() == 'vonet':
@@ -69,7 +69,7 @@ def init_model(model_name, optimizer, lr, device, model_path=None):
     elif optimizer.lower() == 'sgd':
         optimizer = torch.optim.sgd(model.parameters(), lr=lr)
     
-    scheduler = ExponentialLR(optimizer, gamma=0.998)
+    scheduler = ExponentialLR(optimizer, gamma=1.0)
     load_checkpoint(model, model_path, device)
     return model, optimizer, scheduler
 

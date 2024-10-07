@@ -3,8 +3,8 @@ cd ../
 mkdir -p Logs
 
 # User Setting Parameter
-SERVER=5
-CONCEPT="fl"
+SERVER=8
+CONCEPT="cl"
 MODEL="vonet"
 TEST_DATA_NAME="kitti"
 
