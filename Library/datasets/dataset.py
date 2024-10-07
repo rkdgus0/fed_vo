@@ -90,20 +90,12 @@ class TartanAirDataset(Dataset):
         img1 = cv2.imread(img_path1)
         img2 = cv2.imread(img_path2)
         
-        
-        flowfile = self.flow_files[idx].strip()
-        flow = np.load(flowfile) / self.flownorm
-
-
-        flowfile = self.flow_files[idx].strip()
-        flow = np.load(flowfile) / self.flownorm
-
         h, w, _ = img1.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.focalx, self.focaly, self.centerx, self.centery)
         
         res = {'img1': img1, 'img2': img2, 'intrinsic': intrinsicLayer}
         
-        if self.flow_files is not None:
+        if len(self.flow_files) != 0:
             flowfile = self.flow_files[idx].strip()
             flow = np.load(flowfile) / self.flownorm
             res['flow'] = flow

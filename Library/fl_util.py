@@ -23,19 +23,19 @@ def compose_server(args, model, nodes, test_data, train_data, device):
     avg_method = args.avg_method
     batch_size = args.batch_size
     worker_num = args.worker_num
+    test_data_name = args.test_data_name
     if args.easy_hard.lower() == 'hard':
         easy_hard = 'Hard'
     else:
         easy_hard = 'Easy'
-    test_data_path = args.test_data_path
+    test_data_path = f"{args.test_data_path}/pose_left.txt"
 
-    
     num_node_data = []
     for node_idx, train_dataset in enumerate(train_data):
         num_node_data.append(len(train_dataset))
 
-    return SERVER(model, nodes, NUM_NODE, test_data, test_data_path, avg_method, 
-                  num_node_data, batch_size, worker_num, device)
+    return SERVER(model, nodes, NUM_NODE, test_data_name, test_data, test_data_path, 
+                  avg_method, num_node_data, batch_size, worker_num, device)
 
 def compose_node(args, model, optimizer, scheduler, train_data, device):
     epoch = args.local_epoch
@@ -54,7 +54,7 @@ def lambda_controller(global_round, current_round):
         else:
             return 0.04
 
-def init_model(model_name, optimizer, lr):
+def init_model(model_name, optimizer, lr, device, model_path=None):
     if model_name.lower() == 'vonet':
         model = torch.nn.DataParallel(VONet())
     elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
@@ -70,31 +70,48 @@ def init_model(model_name, optimizer, lr):
         optimizer = torch.optim.sgd(model.parameters(), lr=lr)
     
     scheduler = ExponentialLR(optimizer, gamma=0.998)
-
+    load_checkpoint(model, model_path, device)
     return model, optimizer, scheduler
 
 # ===== Model Parameter Save/Load function =====
-def save_checkpoint(model, optimizer, scheduler, global_round, epoch, filepath):
+def save_checkpoint(model, optimizer, scheduler, global_round, epoch, model_path):
     torch.save({
         'global_round': global_round,
         'local_epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
-    }, filepath)
+    }, model_path)
 
-def load_checkpoint(model, optimizer=None, scheduler=None, filepath="",map_location='cuda:0'):
-    if filepath=="":
+'''def load_checkpoint(model, optimizer, scheduler, model_path, map_location):
+    if model_path==None:
         return 0
-    checkpoint = torch.load(filepath, map_location=map_location)
+    checkpoint = torch.load(model_path, map_location=map_location)
     model.load_state_dict(checkpoint['model_state_dict'])
-    if optimizer is not None and 'optimizer_state_dict' in checkpoint and checkpoint['optimizer_state_dict'] is not None:
+    if 'optimizer_state_dict' in checkpoint and checkpoint['optimizer_state_dict'] is not None:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    if scheduler is not None and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
+    if 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    epoch = checkpoint['epoch']
-    print(f"successfully load model from {filepath}")
-    return epoch
+    global_round = checkpoint['global_round']
+    epoch = checkpoint['local_epoch']
+    print(f"successfully load model from {model_path}")
+    return epoch'''
+
+def load_checkpoint(model, model_path, device):
+    if model_path is None:
+        raise ValueError("Invalid File Path!")
+    checkpoint = torch.load(model_path, map_location=device)
+
+    # Partial model update
+    model_state_dict = model.state_dict()
+    pretrained_model = checkpoint['model_state_dict']
+
+    model_dict = {k: v for k, v in pretrained_model.items() if k in model_state_dict and model_state_dict[k].size() == v.size()}
+    model_state_dict.update(model_dict)
+    
+    model.load_state_dict(model_state_dict)
+
+    print(f"Successfully loaded model from {model_path}")
 
 # ===== Test Trajectory Plot function =====
 def plot_traj(gtposes, estposes, vis=False, savefigname=None, title=''):

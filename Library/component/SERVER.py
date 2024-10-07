@@ -11,7 +11,7 @@ from Library.evaluator.tartanair_evaluator import TartanAirEvaluator
 from Library.datasets.transformation import ses2poses_quat
 
 class SERVER():
-    def __init__(self, model, nodes, NUM_NODE, test_data, test_data_path, avg_method, num_node_data, batch_size, worker_num, device='cuda:0'):
+    def __init__(self, model, nodes, NUM_NODE, test_data_name, test_data, test_data_path, avg_method, num_node_data, batch_size, worker_num, device='cuda:0'):
         super(SERVER, self).__init__()
         self.model = model.to(device)
         self.NUM_NODE = NUM_NODE
@@ -25,9 +25,9 @@ class SERVER():
         self.device = device
         self.evaluator = TartanAirEvaluator()
         self.pose_std = np.array([ 0.13,  0.13,  0.13,  0.013 ,  0.013,  0.013], dtype=np.float32)
+        self.kittitype = test_data_name.lower() == 'kitti'
 
     # NUM_NODE 개수만큼 NODE를 선언해서 NODE.train으로 학습, 학습한 모델을 Average하는 코드
-    #TODO 일단 구성에 문제는 없어보이고, node의 pose/flowpose/whole train 함수 짜기
     def train(self, model_name):
         model_parameter = self.model.state_dict()
         node_state_dicts = []
@@ -57,7 +57,8 @@ class SERVER():
         avg_model.clear()
 
    
-   #TODO Test dataset을 이용해서, Global Model의 성능을 확인하는 코드 추가 요망
+   #TODO flownet/ posenet model 사용시, vonet을 선언해서 해당 모듈에 load_state_dict를 해야함
+   # model_name을 받아와야함.
     def test(self):
         pose_preds = []
         pose_gts = []
@@ -85,7 +86,7 @@ class SERVER():
         
         pose_preds = ses2poses_quat(np.concatenate(pose_preds, axis=0))
         pose_gts = np.loadtxt(self.test_data_path).astype(np.float32)
-        result = self.evaluator.evaluate_one_trajectory(pose_gts, pose_preds, scale=True, kittitype=False)
+        result = self.evaluator.evaluate_one_trajectory(pose_gts, pose_preds, scale=True, kittitype=self.kittitype)
         return result
 
     # 모델 가중치 aggregation method(Fedavg: 데이터 수, Equal: 동등)

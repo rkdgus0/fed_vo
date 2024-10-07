@@ -46,7 +46,7 @@ class NODE():
                 elif model_name.lower() == 'flownet' or model_name.lower() == 'matchingnet':
                     loss = flow_loss_function(self.model, sample, self.device)
                 elif model_name.lower() == 'flowposenet' or model_name.lower() == 'posenet':
-                    loss = pose_loss_function(self.model, sample, 1e-6, self.device)
+                    loss, trans_loss, rot_loss = pose_loss_function(self.model, sample, 1e-6, self.device)
                 loss.backward()
                     
                     # print(f"total loss: {loss}, trans loss: {trans_loss}, rot loss: {rot_loss}")

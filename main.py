@@ -54,6 +54,8 @@ def get_args():
     # model: Pretrained된 model weight 저장 경로, .pkl 파일로 받음
     parser.add_argument('--model', '-model', type=str, default='vonet',
                         help="name of pretrained model (default: 'vonet')")
+    parser.add_argument('--model_path', '-model_path', type=str,
+                        help="path of pretrained model (default: None)")
     # batch_size: model 학습과 evaluation에서 사용할 data 개수 조정
     parser.add_argument('--optimizer', '-opt', type=str, default='adam',
                         help="name of model's optimizer (Select: adam, sgd) (default: 'adam')")
@@ -75,7 +77,7 @@ def get_args():
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
     parser.add_argument('--test_data_name', '-test_dataset', type=str, default='kitti',
                         help="Dataset name(select: tartanair, euroc, kitti), (default: tartanair)")
-    parser.add_argument('--train_data_path', '-train_path', type=str, default='/Dataset/tartanAir/train_data/',
+    parser.add_argument('--train_data_path', '-train_path', type=str, default='/scratch/jeongeon/tartanAir/train_data',
                         help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
     parser.add_argument('--test_data_path', '-test_path', type=str, default='data/KITTI_10',
                         help="Dataset folde path, (default: data/KITTI_10)")
@@ -115,6 +117,7 @@ if __name__ == '__main__':
     GLOBAL_ROUND = args.global_round
     LOCAL_ROUND = args.local_epoch
     MODEL_NAME = args.model
+    MODEL_PATH = args.model_path
     TRAIN_DATASET_NAME = args.train_data_name
     TEST_DATASET_NAME = args.test_data_name
     TRAIN_DIR = args.train_data_path
@@ -128,9 +131,11 @@ if __name__ == '__main__':
     print('===== init the model & optimizer & scheduler ..')
     t1 = time()
     torch.cuda.empty_cache()
+    if MODEL_PATH:
+        print('===== Pretrained Model Exist!')
+        print('===== init pretrained model ..')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model, optimizer, scheduler = init_model(args.model, args.optimizer, args.learning_rate)
-    
+    model, optimizer, scheduler = init_model(MODEL_NAME, args.optimizer, args.learning_rate, device, MODEL_PATH)
     t2 = time()
     print(f'===== Success to compose model! (Time(sec): {round(t2-t1,2)})\n')
 
