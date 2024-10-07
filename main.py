@@ -81,8 +81,8 @@ def get_args():
                         help="Dataset folde path, (default: /scratch/jeongeon/tartanAir/train_data)")
     parser.add_argument('--test_data_path', '-test_path', type=str, default='data/KITTI_10',
                         help="Dataset folde path, (default: data/KITTI_10)")
-    parser.add_argument('--easy_hard', '-e_h', type=str, default='Easy',
-                        help="Dataset type(select: Easy, Hard, *), (default: Easy)")
+    parser.add_argument('--easy_hard', '-e_h', type=str, default='both',
+                        help="Dataset type(select: Easy, Hard, *), (default: both)")
     parser.add_argument('--sequence', '-seq', type=str, default='*',
                         help="Dataset type(select: * or P0XX), (default: *)")
     # image_width: 이미지 크기 조정에 사용할 parameter
@@ -122,11 +122,12 @@ if __name__ == '__main__':
     TEST_DATASET_NAME = args.test_data_name
     TRAIN_DIR = args.train_data_path
     TEST_DIR = args.test_data_path
-    EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
+    EXP_NAME = args.exp_name
+    #EXP_NAME = f"{args.exp_name}_NODE{NUM_NODE}_ITER{LOCAL_ROUND}_{args.easy_hard}"
     if TEST_DATASET_NAME.lower() == 'tartanair':
         TEST_ENVS = ['ocean']
     else:
-        TEST_ENVS = None
+        TEST_ENVS = []
 
     print('===== init the model & optimizer & scheduler ..')
     t1 = time()
